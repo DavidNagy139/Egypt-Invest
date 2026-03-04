@@ -15,32 +15,84 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 :root{
+  /* Accent — same in both modes */
   --gold:#C49A2A;--gold-bg:rgba(196,154,42,0.10);--gold-b:rgba(196,154,42,0.28);
-  --ink:#05070F;--ink2:#090D1A;--ink3:#0F1525;--ink4:#161E32;--ink5:#1C2438;
-  --line:rgba(255,255,255,0.07);--line2:rgba(255,255,255,0.13);
-  --txt:#DDE2F0;--txt2:#8A93B0;--txt3:#4A5270;
   --blue:#5B9BFF;--blue-bg:rgba(91,155,255,0.12);--blue-b:rgba(91,155,255,0.28);
   --green:#34D98B;--green-bg:rgba(52,217,139,0.12);--green-b:rgba(52,217,139,0.28);
   --red:#FF5C6A;--red-bg:rgba(255,92,106,0.12);--red-b:rgba(255,92,106,0.28);
   --amber:#FFAB30;--amber-bg:rgba(255,171,48,0.12);--amber-b:rgba(255,171,48,0.28);
   --purple:#A87FFF;--purple-bg:rgba(168,127,255,0.12);--purple-b:rgba(168,127,255,0.28);
+  /* Dark mode (default) */
+  --ink:#05070F;--ink2:#090D1A;--ink3:#0F1525;--ink4:#161E32;--ink5:#1C2438;
+  --line:rgba(255,255,255,0.07);--line2:rgba(255,255,255,0.13);
+  --txt:#DDE2F0;--txt2:#8A93B0;--txt3:#4A5270;
+  --shadow:rgba(0,0,0,0.3);
   --safe-top:env(safe-area-inset-top,0px);
   --safe-bottom:env(safe-area-inset-bottom,0px);
-  --tab-h:60px;
-  --hdr-h:56px;
+  --tab-h:60px;--hdr-h:56px;
 }
+/* Light mode */
+.light{
+  --ink:#F0F2F7;--ink2:#FFFFFF;--ink3:#E8EBF2;--ink4:#D8DCE8;--ink5:#C8CCDA;
+  --line:rgba(0,0,0,0.08);--line2:rgba(0,0,0,0.14);
+  --txt:#0D1226;--txt2:#3A4260;--txt3:#7A84A0;
+  --shadow:rgba(0,0,0,0.08);
+  --gold:#A67C1A;--gold-bg:rgba(166,124,26,0.10);--gold-b:rgba(166,124,26,0.28);
+  --green:#1A9E63;--green-bg:rgba(26,158,99,0.10);--green-b:rgba(26,158,99,0.28);
+  --red:#D63648;--red-bg:rgba(214,54,72,0.10);--red-b:rgba(214,54,72,0.28);
+  --blue:#2B6FD4;--blue-bg:rgba(43,111,212,0.10);--blue-b:rgba(43,111,212,0.28);
+  --amber:#B87014;--amber-bg:rgba(184,112,20,0.10);--amber-b:rgba(184,112,20,0.28);
+  --purple:#6B4FCC;--purple-bg:rgba(107,79,204,0.10);--purple-b:rgba(107,79,204,0.28);
+}
+/* Light mode card & component overrides */
+.light .sum-card,.light .chart-card,.light .fund-item,.light .advice-card,
+.light .alert-card,.light .tl-card,.light .tx-card,.light .detail-hero,
+.light .rule-ref,.light .signal-row,.light .rank-row{
+  box-shadow:0 1px 6px rgba(0,0,0,0.07);
+}
+.light .hm-track{background:#D0D4E0}
+.light .sig-hold{background:#E8EBF2;color:#7A84A0;border-color:rgba(0,0,0,0.12)}
+.light .exec-btn{font-weight:600}
+.light .sheet-body{background:#FFFFFF!important}
+.light .sheet-zone{background:rgba(196,154,42,0.06)!important}
+.light .tab{background:transparent}
+.light .mpg-row{background:#E8EBF2}
+.light .tx-num{background:#D8DCE8}
+.light .ins-num{background:rgba(166,124,26,0.10)}
+/* Light mode card overrides */
+.light .sum-card,
+.light .chart-card,
+.light .fund-item,
+.light .advice-card,
+.light .alert-card,
+.light .tl-card,
+.light .tx-card,
+.light .detail-hero,
+.light .rule-ref,
+.light .signal-row,
+.light .rank-row,
+.light .insight-row{
+  box-shadow:0 1px 4px var(--shadow);
+}
+.light .hm-track{background:#D8DCE8}
+.light .tab{background:transparent}
+.light .upload-sheet .sheet-body{background:#FFFFFF}
+.light .sheet-zone{background:rgba(196,154,42,0.06)}
+.light .sig-hold{background:#E8EBF2;color:var(--txt3);border-color:var(--line2)}
+.light .exec-btn{font-weight:600}
 
 html,body{
   height:100%;background:var(--ink);color:var(--txt);
   font-family:'DM Mono',monospace;overflow:hidden;
-  /* Prevent iOS bounce */
   position:fixed;width:100%;
+  transition:background .3s ease,color .3s ease;
 }
 
 /* ═══ GRAIN ═══ */
 body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
   background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
-  opacity:.4}
+  opacity:.15}
+.light body::before{opacity:.06}
 
 /* ═══ LAYOUT ═══ */
 .app{
@@ -428,6 +480,7 @@ hr{border:none;border-top:1px solid var(--line);margin:16px 0}
   <div class="hdr-right">
     <div class="hdr-badge" id="alert-badge">0</div>
     <button id="install-btn" onclick="installApp()" style="display:none;background:var(--green-bg);border:1px solid var(--green-b);color:var(--green);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:7px 10px;cursor:pointer;align-items:center;gap:5px;">⬇ Install</button>
+    <button id="theme-btn" onclick="toggleTheme()" style="background:var(--ink3);border:1px solid var(--line2);color:var(--txt2);font-size:16px;width:34px;height:34px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">🌙</button>
     <button class="upload-btn" onclick="showUpload()">↑ Excel</button>
   </div>
 </header>
@@ -807,9 +860,9 @@ function renderAnalytics() {
     donutChart = new Chart(donutEl, {
       type:'doughnut',
       data:{labels:Object.keys(typeMap).map(k=>LBLS[k]||k),
-        datasets:[{data:Object.values(typeMap),backgroundColor:Object.keys(typeMap).map(k=>COLS[k]||'#888'),borderColor:'#090D1A',borderWidth:3}]},
+        datasets:[{data:Object.values(typeMap),backgroundColor:Object.keys(typeMap).map(k=>COLS[k]||'#888'),borderColor:isLight?'#F0F2F7':'#090D1A',borderWidth:3}]},
       options:{responsive:false,cutout:'65%',
-        plugins:{legend:{position:'bottom',labels:{color:'#8A93B0',font:{family:'DM Mono',size:9},boxWidth:10,padding:10}},
+        plugins:{legend:{position:'bottom',labels:{color:isLight?'#3A4260':'#8A93B0',font:{family:'DM Mono',size:9},boxWidth:10,padding:10}},
         tooltip:{callbacks:{label:ctx=>`EGP ${fmt(ctx.raw)} (${(ctx.raw/totCur*100).toFixed(1)}%)`}}}}
     });
   }
@@ -824,8 +877,8 @@ function renderAnalytics() {
           borderColor:FUNDS.map(f=>f.pct>=0?'#34D98B':'#FF5C6A'),borderWidth:1}]},
       options:{responsive:true,maintainAspectRatio:false,
         plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.raw}%`}}},
-        scales:{x:{ticks:{color:'#4A5270',font:{family:'DM Mono',size:9}},grid:{color:'rgba(255,255,255,0.03)'}},
-                y:{ticks:{color:'#4A5270',font:{family:'DM Mono',size:9},callback:v=>v+'%'},grid:{color:'rgba(255,255,255,0.03)'}}}}
+        scales:{x:{ticks:{color:isLight?'#3A4260':'#4A5270',font:{family:'DM Mono',size:9}},grid:{color:isLight?'rgba(0,0,0,0.06)':'rgba(255,255,255,0.03)'}},
+                y:{ticks:{color:isLight?'#3A4260':'#4A5270',font:{family:'DM Mono',size:9},callback:v=>v+'%'},grid:{color:isLight?'rgba(0,0,0,0.06)':'rgba(255,255,255,0.03)'}}}}
     });
   }
 
@@ -1236,6 +1289,32 @@ function toast(msg){
   setTimeout(()=>t.classList.remove('show'),3500);
 }
 
+// THEME
+let isLight = localStorage.getItem('theme') === 'light';
+function applyTheme() {
+  const app = document.querySelector('.app');
+  const btn = document.getElementById('theme-btn');
+  if (isLight) {
+    document.documentElement.classList.add('light');
+    app.classList.add('light');
+    if (btn) btn.textContent = '☀️';
+    document.querySelector('meta[name="theme-color"]').setAttribute('content','#F0F2F7');
+  } else {
+    document.documentElement.classList.remove('light');
+    app.classList.remove('light');
+    if (btn) btn.textContent = '🌙';
+    document.querySelector('meta[name="theme-color"]').setAttribute('content','#05070F');
+  }
+  // Re-render charts with correct colors
+  try { renderAnalytics(); } catch(e) {}
+}
+function toggleTheme() {
+  isLight = !isLight;
+  localStorage.setItem('theme', isLight ? 'light' : 'dark');
+  applyTheme();
+  toast(isLight ? '☀️ Light mode' : '🌙 Dark mode');
+}
+
 // INSTALL
 function installApp() {
   if (deferredPrompt) {
@@ -1248,6 +1327,7 @@ function installApp() {
 }
 
 // INIT
+applyTheme();
 renderAll();
 </script>
 </body>

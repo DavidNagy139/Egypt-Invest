@@ -520,6 +520,12 @@ hr{border:none;border-top:1px solid var(--line);margin:16px 0}
       <div id="heatmap-body" class="heatmap"></div>
     </div>
 
+    <!-- Performance Timeline -->
+    <div class="chart-card">
+      <div class="chart-lbl">Portfolio Value — Timeline</div>
+      <div style="position:relative;height:180px"><canvas id="ch-timeline"></canvas></div>
+    </div>
+
     <!-- Fund list -->
     <div class="sec-lbl">All Funds</div>
     <div class="fund-cards" id="fund-cards"></div>
@@ -575,10 +581,58 @@ hr{border:none;border-top:1px solid var(--line);margin:16px 0}
     </div>
   </div>
 
+  <!-- PAGE 5 — SETTINGS -->
+  <div class="page" id="page-settings">
+    <div class="page-title">Settings</div>
+    <div class="page-sub">Target weights · Exchange rate · Tools</div>
+
+    <!-- EGP/USD Rate -->
+    <div class="sec-lbl">EGP / USD Rate</div>
+    <div class="chart-card" style="margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <div style="flex:1">
+          <div class="sum-lbl">Current Rate</div>
+          <div class="sum-val gold" id="rate-display" style="font-size:22px">—</div>
+          <div style="font-size:9px;color:var(--txt3);margin-top:3px" id="rate-source">Not loaded</div>
+        </div>
+        <button onclick="fetchRate()" style="background:var(--gold-bg);border:1px solid var(--gold-b);color:var(--gold);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:8px 12px;cursor:pointer;white-space:nowrap">↻ Refresh</button>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input id="rate-manual" type="number" placeholder="Manual rate e.g. 50.5" step="0.01" min="1"
+          style="flex:1;background:var(--ink4);border:1px solid var(--line2);color:var(--txt);font-family:'DM Mono',monospace;font-size:12px;padding:10px;min-height:40px"/>
+        <button onclick="setManualRate()" style="background:var(--blue-bg);border:1px solid var(--blue-b);color:var(--blue);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:10px 12px;cursor:pointer;white-space:nowrap">Set</button>
+      </div>
+    </div>
+
+    <!-- Target Weights -->
+    <div class="sec-lbl">Target Weights (%)</div>
+    <div class="chart-card" id="weights-editor" style="margin-bottom:12px"></div>
+    <button onclick="saveWeights()" style="width:100%;background:var(--gold-bg);border:1px solid var(--gold-b);color:var(--gold);font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:13px;cursor:pointer;margin-bottom:16px;min-height:44px">💾 Save Target Weights</button>
+
+    <!-- DCA Calculator -->
+    <div class="sec-lbl">DCA Calculator</div>
+    <div class="chart-card" style="margin-bottom:12px">
+      <div class="sum-lbl" style="margin-bottom:8px">Monthly Contribution (EGP)</div>
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <input id="dca-amount" type="number" placeholder="e.g. 5000" min="0"
+          style="flex:1;background:var(--ink4);border:1px solid var(--line2);color:var(--txt);font-family:'DM Mono',monospace;font-size:14px;padding:10px;min-height:44px"/>
+        <button onclick="calcDCA()" style="background:var(--green-bg);border:1px solid var(--green-b);color:var(--green);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:10px 12px;cursor:pointer;white-space:nowrap">Calculate</button>
+      </div>
+      <div id="dca-result"></div>
+    </div>
+
+    <!-- Snapshot -->
+    <div class="sec-lbl">Portfolio Snapshot</div>
+    <div class="chart-card" style="margin-bottom:12px">
+      <div style="font-size:10px;color:var(--txt2);margin-bottom:12px;line-height:1.6">Generate a text summary of your portfolio to copy or share.</div>
+      <button onclick="copySnapshot()" style="width:100%;background:var(--purple-bg);border:1px solid var(--purple-b);color:var(--purple);font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:13px;cursor:pointer;min-height:44px">📋 Copy Snapshot to Clipboard</button>
+    </div>
+  </div>
+
 </div><!-- /content -->
 
 <!-- ═══ BOTTOM TAB BAR ═══ -->
-<nav class="tabbar">
+<nav class="tabbar" style="grid-template-columns:repeat(5,1fr)">
   <button class="tab active" onclick="goPage('analytics',this)" id="tb-analytics">
     <div class="tab-icon">📊</div>
     <div class="tab-label">Analytics</div>
@@ -595,6 +649,10 @@ hr{border:none;border-top:1px solid var(--line);margin:16px 0}
   <button class="tab" onclick="goPage('detail',this)" id="tb-detail">
     <div class="tab-icon">📋</div>
     <div class="tab-label">Detail</div>
+  </button>
+  <button class="tab" onclick="goPage('settings',this)" id="tb-settings">
+    <div class="tab-icon">⚙️</div>
+    <div class="tab-label">Settings</div>
   </button>
 </nav>
 
@@ -728,7 +786,8 @@ function processData(rows) {
 
 let FUNDS = processData(RAW);
 let selectedFund = null;
-let donutChart = null, retChart = null;
+let donutChart = null, retChart = null, timelineChart = null;
+let usdRate = parseFloat(localStorage.getItem('egyptinvest_usd_rate')) || null;
 
 // ════════════════════════════
 // RULES ENGINE
@@ -848,15 +907,18 @@ function renderAnalytics() {
   document.getElementById('analytics-sub').textContent = `${totalTx} transactions · ${FUNDS.length} funds`;
 
   // Summary cards
+  const usdCard = usdRate
+    ? `<div class="sum-card s-blue"><div class="sum-lbl">Value (USD)</div><div class="sum-val blue">$${fmt(Math.round(totCur/usdRate))}</div><div class="sum-sub">@ ${usdRate.toFixed(2)} EGP/USD</div></div>`
+    : `<div class="sum-card s-blue"><div class="sum-lbl">Best Fund</div><div class="sum-val purple">${FUNDS[0].short}</div><div class="sum-sub">+${(FUNDS[0].pct*100).toFixed(1)}% return</div></div>`;
   document.getElementById('summary-strip').innerHTML = `
     <div class="sum-card s-gold"><div class="sum-lbl">Invested</div><div class="sum-val gold">EGP ${fmt(totInv)}</div><div class="sum-sub">${FUNDS.length} funds</div></div>
     <div class="sum-card s-green"><div class="sum-lbl">Current Value</div><div class="sum-val ${totRet>=0?'green':'red'}">EGP ${fmt(totCur)}</div><div class="sum-sub">${totRet>=0?'+':''}${totRet.toFixed(2)}% return</div></div>
     <div class="sum-card s-blue"><div class="sum-lbl">Total Profit</div><div class="sum-val ${totPnl>=0?'green':'red'}">${totPnl>=0?'+':''}EGP ${fmt(Math.abs(totPnl))}</div><div class="sum-sub">${totalTx} purchases</div></div>
-    <div class="sum-card s-purple"><div class="sum-lbl">Best Fund</div><div class="sum-val purple">${FUNDS[0].short}</div><div class="sum-sub">+${(FUNDS[0].pct*100).toFixed(1)}% return</div></div>`;
+    ${usdCard}`;
 
   // Charts
-  [donutChart, retChart].forEach(c=>{try{if(c)c.destroy();}catch(e){}});
-  donutChart = retChart = null;
+  [donutChart, retChart, timelineChart].forEach(c=>{try{if(c)c.destroy();}catch(e){}});
+  donutChart = retChart = timelineChart = null;
 
   const typeMap={};
   FUNDS.forEach(f=>{typeMap[f.type]=(typeMap[f.type]||0)+f.current;});
@@ -902,6 +964,56 @@ function renderAnalytics() {
       <div class="hm-pct" style="color:${col}">${r>=0?'+':''}${r.toFixed(1)}%</div>
     </div>`;
   }).join('');
+
+  // Timeline chart — cumulative portfolio value over time
+  const tlEl = document.getElementById('ch-timeline');
+  if (tlEl) {
+    // Collect all transactions sorted by date
+    const allTx = FUNDS.flatMap(f => f.transactions.map(tx => ({
+      date: tx.date,
+      invested: tx.invested,
+      current: tx.current,
+    }))).sort((a,b) => a.date.localeCompare(b.date));
+
+    // Build cumulative timeline points
+    const points = [];
+    let cumInv = 0, cumCur = 0;
+    allTx.forEach(tx => {
+      cumInv += tx.invested;
+      cumCur += tx.current;
+      points.push({ date: tx.date, inv: cumInv, cur: cumCur });
+    });
+    // Add today's point
+    const totCurFinal = FUNDS.reduce((s,f)=>s+f.current,0);
+    const totInvFinal = FUNDS.reduce((s,f)=>s+f.invested,0);
+    const today = new Date().toISOString().substring(0,10);
+    points.push({ date: today, inv: totInvFinal, cur: totCurFinal });
+
+    const gc = isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.03)';
+    const tc = isLight ? '#3A4260' : '#4A5270';
+    timelineChart = new Chart(tlEl, {
+      type: 'line',
+      data: {
+        labels: points.map(p => p.date),
+        datasets: [
+          { label:'Current Value', data: points.map(p=>Math.round(p.cur)),
+            borderColor:'#34D98B', backgroundColor:'rgba(52,217,139,0.08)',
+            borderWidth:2, pointRadius:3, pointBackgroundColor:'#34D98B', fill:true, tension:0.3 },
+          { label:'Invested', data: points.map(p=>Math.round(p.inv)),
+            borderColor:'#C49A2A', backgroundColor:'transparent',
+            borderWidth:1.5, borderDash:[4,3], pointRadius:0, fill:false, tension:0.3 },
+        ]
+      },
+      options: { responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ position:'bottom', labels:{ color:tc, font:{family:'DM Mono',size:9}, boxWidth:10, padding:10 }},
+          tooltip:{ callbacks:{ label: ctx=>`EGP ${fmt(ctx.raw)}` }}},
+        scales:{
+          x:{ ticks:{ color:tc, font:{family:'DM Mono',size:8}, maxTicksLimit:5 }, grid:{ color:gc }},
+          y:{ ticks:{ color:tc, font:{family:'DM Mono',size:9}, callback:v=>fmtK(v) }, grid:{ color:gc }}
+        }
+      }
+    });
+  }
 
   // Fund cards
   document.getElementById('fund-cards').innerHTML = '';
@@ -1219,10 +1331,15 @@ function goPage(name, el) {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
   const page = document.getElementById('page-'+name);
   if (page) page.classList.add('on');
+  // Track current index for swipe
+  const idx = PAGES.indexOf(name);
+  if (idx >= 0) currentPageIdx = idx;
   // Scroll to top
   document.getElementById('content').scrollTo(0,0);
   // Re-render detail if switching to it
   if (name==='detail' && selectedFund) renderDetail();
+  // Render settings when navigating to it
+  if (name==='settings') renderSettings();
 }
 
 function execAction(fname, type, amt) {
@@ -1247,8 +1364,213 @@ function execAction(fname, type, amt) {
 }
 
 // ════════════════════════════
-// PERSISTENCE (localStorage)
+// SWIPE NAVIGATION
 // ════════════════════════════
+const PAGES = ['analytics','advice','rules','detail','settings'];
+let currentPageIdx = 0;
+let swipeStartX = 0, swipeStartY = 0;
+
+document.getElementById('content').addEventListener('touchstart', e => {
+  swipeStartX = e.touches[0].clientX;
+  swipeStartY = e.touches[0].clientY;
+}, {passive:true});
+
+document.getElementById('content').addEventListener('touchend', e => {
+  const dx = e.changedTouches[0].clientX - swipeStartX;
+  const dy = e.changedTouches[0].clientY - swipeStartY;
+  // Only register horizontal swipes (wider than tall, and >50px)
+  if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+  if (dx < 0 && currentPageIdx < PAGES.length - 1) {
+    currentPageIdx++;
+  } else if (dx > 0 && currentPageIdx > 0) {
+    currentPageIdx--;
+  } else return;
+  const tabId = 'tb-' + PAGES[currentPageIdx];
+  goPage(PAGES[currentPageIdx], document.getElementById(tabId));
+}, {passive:true});
+
+// ════════════════════════════
+// SETTINGS — WEIGHTS EDITOR
+// ════════════════════════════
+const LS_WEIGHTS = 'egyptinvest_weights_v1';
+
+function loadWeights() {
+  try {
+    const raw = localStorage.getItem(LS_WEIGHTS);
+    if (raw) {
+      const w = JSON.parse(raw);
+      Object.assign(TW, w);
+      // Update fund targets
+      FUNDS.forEach(f => { f.target = TW[f.name] || 0; });
+    }
+  } catch(e) {}
+}
+
+function renderWeightsEditor() {
+  const el = document.getElementById('weights-editor');
+  if (!el) return;
+  const total = Object.values(TW).reduce((s,v)=>s+v,0);
+  el.innerHTML = `<div style="font-size:9px;color:var(--txt3);margin-bottom:10px">Total: <span style="color:${Math.abs(total-100)<1?'var(--green)':'var(--amber)'}">${total}%</span> ${Math.abs(total-100)<1?'✓':'(target: 100%)'}. Funds without targets = unmanaged.</div>` +
+    FUNDS.map(f => `
+    <div style="display:grid;grid-template-columns:1fr 70px;gap:8px;align-items:center;margin-bottom:8px">
+      <div>
+        <div style="font-size:11px;font-weight:500">${f.short}</div>
+        <div style="font-size:9px;color:var(--txt3)">${f.name.substring(0,30)}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px">
+        <input type="number" id="w-${f.name.replace(/[^a-z0-9]/gi,'_')}" value="${f.target||0}" min="0" max="100" step="1"
+          style="width:46px;background:var(--ink4);border:1px solid var(--line2);color:var(--txt);font-family:'DM Mono',monospace;font-size:13px;padding:6px;text-align:center"
+          oninput="renderWeightsEditor()"/>
+        <span style="font-size:11px;color:var(--txt3)">%</span>
+      </div>
+    </div>`).join('');
+}
+
+function saveWeights() {
+  const newW = {};
+  FUNDS.forEach(f => {
+    const id = 'w-' + f.name.replace(/[^a-z0-9]/gi,'_');
+    const el = document.getElementById(id);
+    if (el) newW[f.name] = parseFloat(el.value) || 0;
+  });
+  Object.assign(TW, newW);
+  FUNDS.forEach(f => { f.target = TW[f.name] || 0; });
+  try { localStorage.setItem(LS_WEIGHTS, JSON.stringify(newW)); } catch(e) {}
+  renderAll();
+  toast('💾 Target weights saved');
+}
+
+function renderSettings() {
+  renderWeightsEditor();
+  // Update rate display
+  const rd = document.getElementById('rate-display');
+  const rs = document.getElementById('rate-source');
+  if (usdRate) {
+    if(rd) rd.textContent = usdRate.toFixed(2) + ' EGP';
+    if(rs) rs.textContent = localStorage.getItem('egyptinvest_rate_source') || 'Manual';
+  } else {
+    if(rd) rd.textContent = '—';
+    if(rs) rs.textContent = 'Not loaded';
+  }
+}
+
+// ════════════════════════════
+// EGP/USD RATE
+// ════════════════════════════
+async function fetchRate() {
+  const rd = document.getElementById('rate-display');
+  const rs = document.getElementById('rate-source');
+  if(rd) rd.textContent = '…';
+  try {
+    // Free API — no key needed
+    const res = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const rate = data.rates?.EGP;
+    if (!rate) throw new Error('EGP not in response');
+    usdRate = rate;
+    localStorage.setItem('egyptinvest_usd_rate', rate);
+    localStorage.setItem('egyptinvest_rate_source', `Live · ${new Date().toLocaleDateString()}`);
+    if(rd) rd.textContent = rate.toFixed(2) + ' EGP';
+    if(rs) rs.textContent = `Live · ${new Date().toLocaleDateString()}`;
+    renderAll();
+    toast(`✅ Rate updated: ${rate.toFixed(2)} EGP/USD`);
+  } catch(err) {
+    if(rd) rd.textContent = usdRate ? usdRate.toFixed(2)+' EGP' : '—';
+    if(rs) rs.textContent = 'Fetch failed — set manually';
+    toast('⚠ Could not fetch rate — set manually');
+  }
+}
+
+function setManualRate() {
+  const val = parseFloat(document.getElementById('rate-manual').value);
+  if (!val || val < 1) { toast('⚠ Enter a valid rate'); return; }
+  usdRate = val;
+  localStorage.setItem('egyptinvest_usd_rate', val);
+  localStorage.setItem('egyptinvest_rate_source', `Manual · ${new Date().toLocaleDateString()}`);
+  document.getElementById('rate-display').textContent = val.toFixed(2) + ' EGP';
+  document.getElementById('rate-source').textContent = `Manual · ${new Date().toLocaleDateString()}`;
+  document.getElementById('rate-manual').value = '';
+  renderAll();
+  toast(`✅ Rate set: ${val.toFixed(2)} EGP/USD`);
+}
+
+// ════════════════════════════
+// DCA CALCULATOR
+// ════════════════════════════
+function calcDCA() {
+  const amt = parseFloat(document.getElementById('dca-amount').value);
+  const el = document.getElementById('dca-result');
+  if (!amt || amt <= 0) { toast('⚠ Enter a contribution amount'); return; }
+
+  const totCur = FUNDS.reduce((s,f)=>s+f.current,0);
+  // Score each fund by underweight gap (target - actual weight)
+  const scored = FUNDS
+    .filter(f => f.target > 0 && f.type !== 'fi')
+    .map(f => {
+      const w = totCur > 0 ? f.current/totCur*100 : 0;
+      const gap = f.target - w;
+      return { f, gap, w };
+    })
+    .sort((a,b) => b.gap - a.gap);
+
+  if (scored.length === 0) {
+    el.innerHTML = `<div style="font-size:10px;color:var(--txt3)">Set target weights first in the editor above.</div>`;
+    return;
+  }
+
+  // Allocate proportionally to underweight gap (only positive gaps)
+  const posGaps = scored.filter(s => s.gap > 0);
+  const totalGap = posGaps.reduce((s,x)=>s+x.gap,0);
+
+  el.innerHTML = posGaps.length === 0
+    ? `<div style="font-size:10px;color:var(--green)">✅ Portfolio is balanced — distribute EGP ${fmt(amt)} evenly or hold.</div>`
+    : posGaps.map(({f, gap, w}, i) => {
+        const alloc = Math.round(amt * gap / totalGap);
+        const col = i===0?'var(--green)':i===1?'var(--blue)':'var(--txt2)';
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)">
+          <div>
+            <div style="font-size:11px;font-weight:500">${f.short}</div>
+            <div style="font-size:9px;color:var(--txt3)">${w.toFixed(1)}% → ${f.target}% target</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:14px;font-weight:500;color:${col}">EGP ${fmt(alloc)}</div>
+            <div style="font-size:9px;color:var(--txt3)">${(gap).toFixed(1)}pp gap</div>
+          </div>
+        </div>`;
+      }).join('') + `<div style="font-size:9px;color:var(--txt3);margin-top:8px">Proportional to underweight gap. Excludes Fixed Income.</div>`;
+}
+
+// ════════════════════════════
+// PORTFOLIO SNAPSHOT
+// ════════════════════════════
+function copySnapshot() {
+  const totInv = FUNDS.reduce((s,f)=>s+f.invested,0);
+  const totCur = FUNDS.reduce((s,f)=>s+f.current,0);
+  const totPnl = totCur-totInv;
+  const totRet = totInv>0?(totPnl/totInv*100):0;
+  const date = new Date().toLocaleDateString('en-GB');
+
+  let txt = `Egypt Investment Portfolio — ${date}\n`;
+  txt += `${'─'.repeat(36)}\n`;
+  txt += `Invested :  EGP ${fmt(totInv)}\n`;
+  txt += `Value    :  EGP ${fmt(totCur)}\n`;
+  txt += `Profit   :  EGP ${fmt(totPnl)} (+${totRet.toFixed(2)}%)\n`;
+  if (usdRate) txt += `USD Value:  $${fmt(Math.round(totCur/usdRate))} @ ${usdRate.toFixed(2)}\n`;
+  txt += `${'─'.repeat(36)}\n`;
+  FUNDS.forEach(f => {
+    const sign = f.pct >= 0 ? '+' : '';
+    txt += `${f.short.padEnd(8)} ${sign}${(f.pct*100).toFixed(1)}%  EGP ${fmt(f.current)}\n`;
+  });
+  txt += `${'─'.repeat(36)}\n`;
+  txt += `Generated by Egypt Invest PWA`;
+
+  navigator.clipboard.writeText(txt)
+    .then(()=>toast('📋 Snapshot copied to clipboard!'))
+    .catch(()=>toast('⚠ Copy failed — try again'));
+}
+
+
 const LS_KEY = 'egyptinvest_raw_v1';
 
 function saveToStorage(rawRows) {
@@ -1393,6 +1715,7 @@ function installApp() {
 
 // INIT
 applyTheme();
+loadWeights();
 // Load persisted data if available, otherwise fall back to demo RAW
 (function initData() {
   const stored = loadFromStorage();

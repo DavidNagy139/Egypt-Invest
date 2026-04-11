@@ -447,7 +447,12 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
 .sheet-cancel{
   width:100%;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.1em;
   text-transform:uppercase;padding:13px;border:1px solid var(--line2);
-  background:transparent;color:var(--txt2);cursor:pointer;min-height:44px;
+  background:transparent;color:var(--txt2);cursor:pointer;min-height:44px;margin-bottom:8px;
+}
+.sheet-clear{
+  width:100%;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.08em;
+  text-transform:uppercase;padding:11px;border:1px solid var(--red-b);
+  background:var(--red-bg);color:var(--red);cursor:pointer;min-height:44px;
 }
 #file-input{display:none}
 
@@ -610,6 +615,7 @@ hr{border:none;border-top:1px solid var(--line);margin:16px 0}
       Required columns: <strong style="color:var(--txt)">Fund Name · Fund Type · Investment Amount · Current Value · Purchase Date</strong>
     </div>
     <button class="sheet-cancel" onclick="hideUpload()">Cancel</button>
+    <button class="sheet-clear" id="sheet-clear-btn" onclick="clearStoredData()" style="display:none">🗑 Clear saved data · use demo</button>
     <input type="file" id="file-input" accept=".xlsx,.xls" onchange="handleFile(this.files[0])"/>
   </div>
 </div>
@@ -1228,10 +1234,67 @@ function execAction(fname, type, amt) {
     if (amt>0){f.invested+=amt;f.current+=amt;f.profit=f.current-f.invested;toast(`📥 Added EGP ${fmt(amt)} to ${f.short}`);}
     else toast(`📥 Deploy maximum capital to ${f.short}`);
   }
+  // Persist adjusted state as synthetic raw rows
+  const syntheticRaw = FUNDS.flatMap(fund =>
+    fund.transactions.map(tx => ({
+      ...tx,
+      // scale current value proportionally if fund was adjusted
+      current: fund.current * (tx.invested / fund.invested),
+    }))
+  );
+  saveToStorage(syntheticRaw);
   renderAll();
 }
 
-function showUpload() { document.getElementById('upload-sheet').classList.add('show'); }
+// ════════════════════════════
+// PERSISTENCE (localStorage)
+// ════════════════════════════
+const LS_KEY = 'egyptinvest_raw_v1';
+
+function saveToStorage(rawRows) {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify(rawRows));
+  } catch(e) {
+    // quota exceeded or private mode — fail silently
+    console.warn('Storage save failed:', e);
+  }
+}
+
+function loadFromStorage() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.length === 0) return null;
+    return parsed;
+  } catch(e) {
+    return null;
+  }
+}
+
+function clearStoredData() {
+  if (!confirm('Clear your saved portfolio and revert to demo data?')) return;
+  localStorage.removeItem(LS_KEY);
+  [donutChart,retChart].forEach(c=>{try{if(c)c.destroy();}catch(e){}});
+  donutChart=retChart=null;
+  FUNDS = processData(RAW);
+  selectedFund = null;
+  hideUpload();
+  updateClearBtn();
+  setTimeout(()=>{ renderAll(); toast('🗑 Cleared — showing demo data'); },80);
+}
+
+function updateClearBtn() {
+  const btn = document.getElementById('sheet-clear-btn');
+  if (!btn) return;
+  btn.style.display = localStorage.getItem(LS_KEY) ? 'block' : 'none';
+}
+
+function showUpload() {
+  document.getElementById('upload-sheet').classList.add('show');
+  updateClearBtn();
+}
+
 function hideUpload() { document.getElementById('upload-sheet').classList.remove('show'); }
 function handleSheetBgClick(e) { if(e.target===document.getElementById('upload-sheet'))hideUpload(); }
 function handleDrop(e) { e.preventDefault();const f=e.dataTransfer.files[0];if(f)handleFile(f); }
@@ -1250,6 +1313,7 @@ function handleFile(file) {
       [donutChart,retChart].forEach(c=>{try{if(c)c.destroy();}catch(e){}});
       donutChart=retChart=null;
       FUNDS = processData(parsed);
+      saveToStorage(parsed);
       selectedFund = null;
       hideUpload();
       document.getElementById('file-input').value='';
@@ -1329,6 +1393,20 @@ function installApp() {
 
 // INIT
 applyTheme();
+// Load persisted data if available, otherwise fall back to demo RAW
+(function initData() {
+  const stored = loadFromStorage();
+  if (stored) {
+    try {
+      FUNDS = processData(stored);
+      console.log(`📦 Loaded ${stored.length} rows from localStorage`);
+    } catch(e) {
+      console.warn('Failed to restore stored data, using demo:', e);
+      FUNDS = processData(RAW);
+    }
+  }
+  // FUNDS already initialised with RAW at declaration if nothing stored
+})();
 renderAll();
 </script>
 </body>

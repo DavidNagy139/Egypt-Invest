@@ -629,10 +629,54 @@ hr{border:none;border-top:1px solid var(--line);margin:16px 0}
     </div>
   </div>
 
+  <!-- PAGE 7 — PRICE ALERTS -->
+  <div class="page" id="page-alerts">
+    <div class="page-title">Price Alerts</div>
+    <div class="page-sub">Notify when return hits your threshold</div>
+
+    <div class="sec-lbl">Add Alert</div>
+    <div class="chart-card" style="margin-bottom:12px">
+      <div style="margin-bottom:10px">
+        <div class="sum-lbl" style="margin-bottom:6px">Fund</div>
+        <select id="alert-fund-select"
+          style="width:100%;background:var(--ink4);border:1px solid var(--line2);color:var(--txt);
+                 font-family:'DM Mono',monospace;font-size:12px;padding:10px;min-height:44px;appearance:none">
+        </select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+        <div>
+          <div class="sum-lbl" style="margin-bottom:6px">Direction</div>
+          <select id="alert-dir"
+            style="width:100%;background:var(--ink4);border:1px solid var(--line2);color:var(--txt);
+                   font-family:'DM Mono',monospace;font-size:12px;padding:10px;min-height:44px;appearance:none">
+            <option value="above">Return ≥</option>
+            <option value="below">Return ≤</option>
+          </select>
+        </div>
+        <div>
+          <div class="sum-lbl" style="margin-bottom:6px">Threshold (%)</div>
+          <input id="alert-threshold" type="number" placeholder="e.g. 25" step="0.5"
+            style="width:100%;background:var(--ink4);border:1px solid var(--line2);color:var(--txt);
+                   font-family:'DM Mono',monospace;font-size:14px;padding:10px;min-height:44px"/>
+        </div>
+      </div>
+      <button onclick="addAlert()"
+        style="width:100%;background:var(--amber-bg);border:1px solid var(--amber-b);color:var(--amber);
+               font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+               padding:13px;cursor:pointer;min-height:44px">＋ Add Alert</button>
+    </div>
+
+    <div class="sec-lbl">Active Alerts</div>
+    <div id="alerts-list"></div>
+
+    <div class="sec-lbl" style="margin-top:4px">Triggered History</div>
+    <div id="alerts-history"></div>
+  </div>
+
 </div><!-- /content -->
 
 <!-- ═══ BOTTOM TAB BAR ═══ -->
-<nav class="tabbar" style="grid-template-columns:repeat(5,1fr)">
+<nav class="tabbar" id="tabbar" style="grid-template-columns:repeat(6,1fr)">
   <button class="tab active" onclick="goPage('analytics',this)" id="tb-analytics">
     <div class="tab-icon">📊</div>
     <div class="tab-label">Analytics</div>
@@ -649,6 +693,11 @@ hr{border:none;border-top:1px solid var(--line);margin:16px 0}
   <button class="tab" onclick="goPage('detail',this)" id="tb-detail">
     <div class="tab-icon">📋</div>
     <div class="tab-label">Detail</div>
+  </button>
+  <button class="tab" onclick="goPage('alerts',this)" id="tb-alerts">
+    <div class="tab-dot" id="alert-dot-tab"></div>
+    <div class="tab-icon">🔔</div>
+    <div class="tab-label">Alerts</div>
   </button>
   <button class="tab" onclick="goPage('settings',this)" id="tb-settings">
     <div class="tab-icon">⚙️</div>
@@ -1340,6 +1389,8 @@ function goPage(name, el) {
   if (name==='detail' && selectedFund) renderDetail();
   // Render settings when navigating to it
   if (name==='settings') renderSettings();
+  // Render alerts page
+  if (name==='alerts') renderAlertsPage();
 }
 
 function execAction(fname, type, amt) {
@@ -1366,7 +1417,7 @@ function execAction(fname, type, amt) {
 // ════════════════════════════
 // SWIPE NAVIGATION
 // ════════════════════════════
-const PAGES = ['analytics','advice','rules','detail','settings'];
+const PAGES = ['analytics','advice','rules','detail','alerts','settings'];
 let currentPageIdx = 0;
 let swipeStartX = 0, swipeStartY = 0;
 
@@ -1570,8 +1621,132 @@ function copySnapshot() {
     .catch(()=>toast('⚠ Copy failed — try again'));
 }
 
+// ════════════════════════════
+// PRICE ALERTS
+// ════════════════════════════
+const LS_ALERTS = 'egyptinvest_alerts_v1';
+let priceAlerts = [];
+let alertHistory = [];
 
-const LS_KEY = 'egyptinvest_raw_v1';
+function loadAlerts() {
+  try {
+    const raw = localStorage.getItem(LS_ALERTS);
+    if (raw) {
+      const d = JSON.parse(raw);
+      priceAlerts = d.active || [];
+      alertHistory = d.history || [];
+    }
+  } catch(e) {}
+}
+
+function saveAlerts() {
+  try {
+    localStorage.setItem(LS_ALERTS, JSON.stringify({
+      active: priceAlerts,
+      history: alertHistory.slice(-20),
+    }));
+  } catch(e) {}
+}
+
+function renderAlertsPage() {
+  const sel = document.getElementById('alert-fund-select');
+  if (sel && sel.options.length === 0) {
+    sel.innerHTML = FUNDS.map(f =>
+      `<option value="${f.name}">${f.short} — ${f.name.substring(0,28)}</option>`
+    ).join('');
+  }
+  renderAlertsList();
+  checkPriceAlerts();
+}
+
+function addAlert() {
+  const fundName = document.getElementById('alert-fund-select')?.value;
+  const dir = document.getElementById('alert-dir')?.value;
+  const thr = parseFloat(document.getElementById('alert-threshold')?.value);
+  if (!fundName) { toast('⚠ Select a fund'); return; }
+  if (isNaN(thr)) { toast('⚠ Enter a threshold %'); return; }
+  const fund = FUNDS.find(f => f.name === fundName);
+  if (!fund) return;
+  priceAlerts.push({
+    id: Date.now(), fundName, short: fund.short,
+    dir, thr, createdAt: new Date().toISOString().substring(0,10), triggered: false,
+  });
+  saveAlerts();
+  document.getElementById('alert-threshold').value = '';
+  renderAlertsList();
+  toast(`🔔 Alert set: ${fund.short} ${dir==='above'?'≥':'≤'} ${thr}%`);
+}
+
+function removeAlert(id) {
+  priceAlerts = priceAlerts.filter(a => a.id !== id);
+  saveAlerts();
+  renderAlertsList();
+  toast('🗑 Alert removed');
+}
+
+function checkPriceAlerts() {
+  let anyNew = false;
+  priceAlerts.forEach(alert => {
+    const fund = FUNDS.find(f => f.name === alert.fundName);
+    if (!fund) return;
+    const ret = fund.pct * 100;
+    const hit = alert.dir === 'above' ? ret >= alert.thr : ret <= alert.thr;
+    if (hit && !alert.triggered) {
+      alert.triggered = true;
+      anyNew = true;
+      const msg = `🔔 ${fund.short} ${alert.dir==='above'?'≥':'≤'}${alert.thr}% — now ${ret.toFixed(1)}%`;
+      alertHistory.unshift({ msg, date: new Date().toISOString().substring(0,10) });
+      toast(msg);
+    }
+    if (!hit) alert.triggered = false; // re-arm
+  });
+  if (anyNew) {
+    saveAlerts();
+    const dot = document.getElementById('alert-dot-tab');
+    if (dot) { dot.style.display='block'; }
+  }
+}
+
+function renderAlertsList() {
+  const el = document.getElementById('alerts-list');
+  const hel = document.getElementById('alerts-history');
+  if (!el) return;
+
+  el.innerHTML = priceAlerts.length === 0
+    ? `<div style="font-size:10px;color:var(--txt3);padding:12px 0">No active alerts.</div>`
+    : priceAlerts.map(a => {
+        const fund = FUNDS.find(f => f.name === a.fundName);
+        const ret = fund ? (fund.pct*100).toFixed(1) : '?';
+        const hit = a.triggered;
+        return `<div style="background:var(--ink3);border:1px solid ${hit?'var(--green-b)':'var(--line)'};
+                             padding:12px;margin-bottom:8px;display:grid;
+                             grid-template-columns:1fr auto;gap:8px;align-items:center">
+          <div>
+            <div style="font-size:12px;font-weight:500">${a.short}</div>
+            <div style="font-size:10px;color:${hit?'var(--green)':'var(--txt3)'};margin-top:3px">
+              ${a.dir==='above'?'≥':'≤'} ${a.thr}% &nbsp;·&nbsp; now <strong style="color:var(--txt)">${ret}%</strong>
+              &nbsp;·&nbsp; ${hit?'✅ Hit':'⏳ Watching'}
+            </div>
+            <div style="font-size:9px;color:var(--txt3);margin-top:2px">Set ${a.createdAt}</div>
+          </div>
+          <button onclick="removeAlert(${a.id})"
+            style="background:var(--red-bg);border:1px solid var(--red-b);color:var(--red);
+                   font-family:'DM Mono',monospace;font-size:9px;padding:7px 10px;cursor:pointer">✕</button>
+        </div>`;
+      }).join('');
+
+  if (hel) {
+    hel.innerHTML = alertHistory.length === 0
+      ? `<div style="font-size:10px;color:var(--txt3);padding:12px 0">No alerts triggered yet.</div>`
+      : alertHistory.slice(0,15).map(h =>
+          `<div style="padding:9px 0;border-bottom:1px solid var(--line);font-size:10px;color:var(--txt2)">
+            <span style="color:var(--green)">${h.date}</span> &nbsp; ${h.msg}
+          </div>`
+        ).join('');
+  }
+}
+
+
 
 function saveToStorage(rawRows) {
   try {
@@ -1716,6 +1891,7 @@ function installApp() {
 // INIT
 applyTheme();
 loadWeights();
+loadAlerts();
 // Load persisted data if available, otherwise fall back to demo RAW
 (function initData() {
   const stored = loadFromStorage();
@@ -1728,9 +1904,10 @@ loadWeights();
       FUNDS = processData(RAW);
     }
   }
-  // FUNDS already initialised with RAW at declaration if nothing stored
 })();
 renderAll();
+// Check alerts against current data
+setTimeout(() => checkPriceAlerts(), 300);
 </script>
 </body>
 </html>

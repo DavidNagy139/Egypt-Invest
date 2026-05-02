@@ -1,0 +1,1887 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="theme-color" content="#0A0D14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="محفظتي">
+<meta name="description" content="تتبع وتحليل صناديق الاستثمار المصرية">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<title>محفظتي — Investment Portfolio Tracker</title>
+
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&family=Tajawal:wght@300;400;500;700;800;900&display=swap" rel="stylesheet">
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<style>
+:root {
+  --bg1: #0A0D14;
+  --bg2: #111520;
+  --bg3: #181D2B;
+  --bg4: #1E2538;
+  --bg5: #232840;
+  --gold: #C9A84C;
+  --gold-light: #E8C97A;
+  --gold-dim: rgba(201,168,76,0.18);
+  --gold-border: rgba(201,168,76,0.35);
+  --green: #2ECC71;
+  --red: #E74C3C;
+  --blue: #3498DB;
+  --orange: #F39C12;
+  --purple: #9B59B6;
+  --teal: #1ABC9C;
+  --text: #E8E4D8;
+  --text-muted: #8A8880;
+  --text-dim: #5A5858;
+  --border: rgba(201,168,76,0.12);
+  --radius: 16px;
+  --radius-sm: 10px;
+  --nav-h: 72px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+html, body {
+  width:100%; height:100%;
+  overflow:hidden;
+  background:var(--bg1);
+  color:var(--text);
+  font-family:'Cairo', sans-serif;
+  font-size:14px;
+  direction:rtl;
+}
+
+/* ── SCROLLABLE VIEW ── */
+.view {
+  position:absolute;
+  inset:0;
+  overflow-y:auto;
+  overflow-x:hidden;
+  padding-bottom:calc(var(--nav-h) + var(--safe-bottom) + 20px);
+  display:none;
+  -webkit-overflow-scrolling:touch;
+}
+.view.active { display:block; }
+.view::-webkit-scrollbar { width:0; }
+
+/* ── SPLASH ── */
+#splash {
+  position:fixed; inset:0; z-index:999;
+  background:var(--bg1);
+  display:flex; align-items:center; justify-content:center;
+  flex-direction:column;
+  transition:opacity 0.5s;
+}
+#splash.hidden { opacity:0; pointer-events:none; }
+.splash-glow {
+  position:absolute;
+  width:400px; height:400px; border-radius:50%;
+  background:radial-gradient(circle, rgba(201,168,76,0.12) 0%, transparent 70%);
+  animation:pulse 2s infinite;
+}
+@keyframes pulse {
+  0%,100% { transform:scale(1); opacity:0.6; }
+  50% { transform:scale(1.15); opacity:1; }
+}
+.splash-logo {
+  font-family:'Tajawal',sans-serif;
+  font-size:52px; font-weight:900;
+  background:linear-gradient(135deg, var(--gold-light), var(--gold), #8a6f32);
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+  position:relative; z-index:1;
+  animation:fadeInUp 0.8s ease;
+}
+.splash-sub {
+  color:var(--text-muted); font-size:13px; margin-top:8px;
+  position:relative; z-index:1; letter-spacing:1px;
+  animation:fadeInUp 0.8s 0.2s ease both;
+}
+.splash-loader {
+  margin-top:48px; position:relative; z-index:1;
+  width:120px; height:2px; background:var(--bg4); border-radius:2px;
+  overflow:hidden;
+  animation:fadeInUp 0.8s 0.4s ease both;
+}
+.splash-loader-bar {
+  height:100%; width:0%; border-radius:2px;
+  background:linear-gradient(90deg, var(--gold-dim), var(--gold), var(--gold-dim));
+  animation:loading 2.2s ease forwards;
+}
+@keyframes loading { to { width:100%; } }
+@keyframes fadeInUp {
+  from { opacity:0; transform:translateY(20px); }
+  to { opacity:1; transform:translateY(0); }
+}
+
+/* ── TOP BAR ── */
+.topbar {
+  position:sticky; top:0; z-index:100;
+  padding:16px 20px 12px;
+  background:linear-gradient(180deg, var(--bg1) 80%, transparent);
+  display:flex; align-items:center; justify-content:space-between;
+}
+.topbar-title {
+  font-family:'Tajawal',sans-serif; font-size:22px; font-weight:800;
+  background:linear-gradient(135deg, var(--gold-light), var(--gold));
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+}
+.topbar-greeting { font-size:13px; color:var(--text-muted); }
+.topbar-actions { display:flex; gap:10px; }
+.icon-btn {
+  width:40px; height:40px; border-radius:12px;
+  background:var(--bg3); border:1px solid var(--border);
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer; font-size:18px; transition:all 0.15s;
+}
+.icon-btn:active { transform:scale(0.93); background:var(--bg4); }
+
+/* ── BOTTOM NAV ── */
+.bottom-nav {
+  position:fixed; bottom:0; left:0; right:0; z-index:200;
+  height:calc(var(--nav-h) + var(--safe-bottom));
+  padding-bottom:var(--safe-bottom);
+  background:var(--bg2);
+  border-top:1px solid var(--border);
+  display:flex; align-items:flex-start; justify-content:space-around;
+  padding-top:8px;
+}
+.nav-item {
+  flex:1; display:flex; flex-direction:column; align-items:center; gap:4px;
+  cursor:pointer; padding:8px 4px; border-radius:12px;
+  transition:all 0.2s; color:var(--text-muted);
+}
+.nav-item.active { color:var(--gold); }
+.nav-icon { font-size:22px; line-height:1; }
+.nav-label { font-size:10px; font-weight:600; letter-spacing:0.3px; }
+.nav-add {
+  width:52px; height:52px; border-radius:50%;
+  background:linear-gradient(135deg, var(--gold-light), var(--gold));
+  display:flex; align-items:center; justify-content:center;
+  font-size:26px; font-weight:300; color:var(--bg1);
+  box-shadow:0 4px 20px rgba(201,168,76,0.4);
+  margin-top:-8px;
+  flex-shrink:0;
+  cursor:pointer;
+  transition:transform 0.15s;
+}
+.nav-add:active { transform:scale(0.93); }
+
+/* ── CARDS & CONTAINERS ── */
+.pad { padding:0 16px; }
+.card {
+  background:var(--bg3);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:18px;
+  margin-bottom:12px;
+  position:relative; overflow:hidden;
+}
+.card-gold-top::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:2px;
+  background:linear-gradient(90deg, transparent, var(--gold), transparent);
+}
+.card-green-top::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:2px;
+  background:linear-gradient(90deg, transparent, var(--green), transparent);
+}
+.card-red-top::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:2px;
+  background:linear-gradient(90deg, transparent, var(--red), transparent);
+}
+
+/* ── SECTION HEADER ── */
+.section-hd {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 16px; margin:18px 0 12px;
+}
+.section-title { font-family:'Tajawal',sans-serif; font-size:16px; font-weight:800; color:#fff; }
+.section-link { font-size:12px; color:var(--gold); cursor:pointer; }
+
+/* ── PORTFOLIO SUMMARY CARD ── */
+.portfolio-main {
+  background:linear-gradient(135deg, var(--bg3), var(--bg4));
+  border:1px solid var(--gold-border);
+  border-radius:20px;
+  padding:24px 20px;
+  margin:0 16px 16px;
+  position:relative; overflow:hidden;
+}
+.portfolio-main::before {
+  content:'';
+  position:absolute; top:-60px; right:-60px;
+  width:200px; height:200px; border-radius:50%;
+  background:radial-gradient(circle, rgba(201,168,76,0.1), transparent 70%);
+}
+.pm-label { font-size:11px; color:var(--text-muted); letter-spacing:1px; margin-bottom:4px; }
+.pm-value {
+  font-family:'Tajawal',sans-serif; font-size:34px; font-weight:900;
+  color:var(--gold-light); line-height:1.1;
+}
+.pm-row { display:flex; gap:20px; margin-top:14px; }
+.pm-stat { flex:1; }
+.pm-stat-label { font-size:11px; color:var(--text-muted); }
+.pm-stat-val { font-size:15px; font-weight:700; margin-top:2px; }
+.positive { color:var(--green); }
+.negative { color:var(--red); }
+.neutral { color:var(--gold); }
+
+/* ── KPI SCROLL ── */
+.kpi-scroll {
+  display:flex; gap:10px; overflow-x:auto; padding:0 16px 4px;
+  -webkit-overflow-scrolling:touch;
+}
+.kpi-scroll::-webkit-scrollbar { display:none; }
+.kpi-card {
+  flex-shrink:0;
+  background:var(--bg3); border:1px solid var(--border);
+  border-radius:14px; padding:14px 16px; min-width:130px;
+}
+.kpi-icon { font-size:20px; margin-bottom:6px; }
+.kpi-label { font-size:10px; color:var(--text-muted); margin-bottom:4px; }
+.kpi-val { font-size:16px; font-weight:700; font-family:'Tajawal',sans-serif; }
+
+/* ── ALERT BANNER ── */
+.alert-banner {
+  margin:0 16px 12px;
+  background:rgba(243,156,18,0.1);
+  border:1px solid rgba(243,156,18,0.3);
+  border-radius:12px; padding:12px 16px;
+  display:flex; align-items:center; gap:10px;
+  font-size:12px; color:var(--orange);
+}
+.alert-close { margin-right:auto; font-size:16px; cursor:pointer; }
+.alert-banner.red {
+  background:rgba(231,76,60,0.1);
+  border-color:rgba(231,76,60,0.3);
+  color:var(--red);
+}
+
+/* ── FUND CARD (list item) ── */
+.fund-item {
+  display:flex; align-items:center; gap:12px;
+  padding:14px 16px;
+  background:var(--bg3);
+  border:1px solid var(--border);
+  border-radius:14px; margin-bottom:8px;
+  cursor:pointer; transition:all 0.15s;
+}
+.fund-item:active { background:var(--bg4); transform:scale(0.99); }
+.fund-avatar {
+  width:44px; height:44px; border-radius:12px;
+  background:linear-gradient(135deg, var(--bg4), var(--bg5));
+  border:1px solid var(--border);
+  display:flex; align-items:center; justify-content:center;
+  font-size:18px; flex-shrink:0;
+}
+.fund-info { flex:1; min-width:0; }
+.fund-name { font-size:13px; font-weight:700; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.fund-meta { font-size:11px; color:var(--text-muted); margin-top:2px; }
+.fund-return { text-align:left; flex-shrink:0; }
+.fund-pct { font-size:15px; font-weight:700; font-family:'Tajawal',sans-serif; }
+.fund-change { font-size:11px; color:var(--text-muted); margin-top:2px; text-align:left; }
+
+/* ── DONUT CHART ── */
+.chart-wrap { padding:16px; text-align:center; }
+.chart-legend { display:flex; justify-content:center; gap:16px; margin-top:12px; flex-wrap:wrap; }
+.legend-item { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--text-muted); }
+.legend-dot { width:10px; height:10px; border-radius:50%; }
+
+/* ── BADGE ── */
+.badge {
+  display:inline-block; padding:3px 10px;
+  border-radius:20px; font-size:10px; font-weight:700;
+}
+.badge-green { background:rgba(46,204,113,0.15); color:var(--green); border:1px solid rgba(46,204,113,0.3); }
+.badge-gold { background:rgba(201,168,76,0.15); color:var(--gold); border:1px solid rgba(201,168,76,0.3); }
+.badge-red { background:rgba(231,76,60,0.15); color:var(--red); border:1px solid rgba(231,76,60,0.3); }
+.badge-blue { background:rgba(52,152,219,0.15); color:var(--blue); border:1px solid rgba(52,152,219,0.3); }
+.badge-orange { background:rgba(243,156,18,0.15); color:var(--orange); border:1px solid rgba(243,156,18,0.3); }
+.badge-purple { background:rgba(155,89,182,0.15); color:var(--purple); border:1px solid rgba(155,89,182,0.3); }
+.badge-teal { background:rgba(26,188,156,0.15); color:var(--teal); border:1px solid rgba(26,188,156,0.3); }
+
+/* ── TABS ── */
+.tabs {
+  display:flex; overflow-x:auto; gap:6px; padding:0 16px 12px;
+  -webkit-overflow-scrolling:touch;
+}
+.tabs::-webkit-scrollbar { display:none; }
+.tab-btn {
+  flex-shrink:0; padding:8px 16px; border-radius:20px;
+  font-size:12px; font-weight:700;
+  background:var(--bg3); border:1px solid var(--border);
+  color:var(--text-muted); cursor:pointer; transition:all 0.2s;
+}
+.tab-btn.active {
+  background:rgba(201,168,76,0.15); border-color:var(--gold-border);
+  color:var(--gold);
+}
+
+/* ── FORM STYLES ── */
+.form-group { margin-bottom:16px; }
+.form-label {
+  font-size:12px; color:var(--text-muted); margin-bottom:6px; display:block;
+  font-weight:600; letter-spacing:0.3px;
+}
+.form-input {
+  width:100%; background:var(--bg4); border:1px solid var(--border);
+  border-radius:var(--radius-sm); padding:13px 16px;
+  color:var(--text); font-family:'Cairo',sans-serif; font-size:14px;
+  transition:border-color 0.2s; outline:none;
+}
+.form-input:focus { border-color:var(--gold-border); }
+.form-input::placeholder { color:var(--text-dim); }
+.form-select {
+  width:100%; background:var(--bg4); border:1px solid var(--border);
+  border-radius:var(--radius-sm); padding:13px 16px;
+  color:var(--text); font-family:'Cairo',sans-serif; font-size:14px;
+  appearance:none; -webkit-appearance:none; outline:none;
+  cursor:pointer;
+}
+.form-select option { background:var(--bg3); }
+textarea.form-input { resize:vertical; min-height:80px; }
+
+/* ── STEP INDICATOR ── */
+.step-bar { padding:0 16px 20px; }
+.step-progress {
+  height:3px; background:var(--bg4); border-radius:2px; margin-bottom:12px;
+}
+.step-fill {
+  height:100%; border-radius:2px; transition:width 0.3s ease;
+  background:linear-gradient(90deg, var(--gold-dim), var(--gold));
+}
+.step-labels { display:flex; justify-content:space-between; }
+.step-label { font-size:11px; color:var(--text-muted); }
+.step-label.active { color:var(--gold); font-weight:700; }
+
+/* ── SEGMENTED CONTROL ── */
+.segmented {
+  display:flex; background:var(--bg4); border-radius:var(--radius-sm);
+  border:1px solid var(--border); overflow:hidden;
+}
+.seg-opt {
+  flex:1; padding:10px 8px; text-align:center;
+  font-size:12px; font-weight:600; cursor:pointer;
+  color:var(--text-muted); transition:all 0.2s;
+}
+.seg-opt.active {
+  background:rgba(201,168,76,0.15); color:var(--gold);
+}
+
+/* ── CTA BUTTON ── */
+.btn-primary {
+  width:100%; padding:16px;
+  background:linear-gradient(135deg, var(--gold-light), var(--gold));
+  border:none; border-radius:var(--radius-sm);
+  font-family:'Tajawal',sans-serif; font-size:16px; font-weight:800;
+  color:var(--bg1); cursor:pointer;
+  box-shadow:0 4px 20px rgba(201,168,76,0.3);
+  transition:all 0.15s;
+}
+.btn-primary:active { transform:scale(0.98); }
+.btn-outline {
+  width:100%; padding:14px;
+  background:transparent; border:1px solid var(--gold-border);
+  border-radius:var(--radius-sm);
+  font-family:'Tajawal',sans-serif; font-size:15px; font-weight:700;
+  color:var(--gold); cursor:pointer;
+  transition:all 0.15s;
+}
+.btn-outline:active { background:var(--gold-dim); }
+.btn-danger {
+  padding:10px 20px; background:rgba(231,76,60,0.15);
+  border:1px solid rgba(231,76,60,0.3); border-radius:var(--radius-sm);
+  color:var(--red); font-family:'Cairo',sans-serif; font-size:13px; font-weight:700;
+  cursor:pointer;
+}
+
+/* ── LOADING / SKELETON ── */
+.skeleton {
+  background:linear-gradient(90deg, var(--bg3) 25%, var(--bg4) 50%, var(--bg3) 75%);
+  background-size:200% 100%; border-radius:8px;
+  animation:shimmer 1.5s infinite;
+}
+@keyframes shimmer { 0%{ background-position:200% 0; } 100%{ background-position:-200% 0; } }
+
+/* ── MODAL / SHEET ── */
+.sheet-overlay {
+  position:fixed; inset:0; z-index:500;
+  background:rgba(0,0,0,0.7); backdrop-filter:blur(4px);
+  display:flex; align-items:flex-end; justify-content:center;
+  opacity:0; pointer-events:none; transition:opacity 0.25s;
+}
+.sheet-overlay.open { opacity:1; pointer-events:all; }
+.sheet {
+  width:100%; max-width:500px;
+  background:var(--bg2); border-radius:20px 20px 0 0;
+  border-top:1px solid var(--border);
+  padding:20px 20px calc(20px + var(--safe-bottom));
+  transform:translateY(100%); transition:transform 0.3s cubic-bezier(.32,0,.67,0);
+  max-height:90vh; overflow-y:auto;
+}
+.sheet-overlay.open .sheet { transform:translateY(0); }
+.sheet-handle { width:40px; height:4px; background:var(--bg5); border-radius:2px; margin:0 auto 20px; }
+.sheet-title { font-family:'Tajawal',sans-serif; font-size:20px; font-weight:800; color:#fff; margin-bottom:20px; }
+
+/* ── FUND DETAIL ── */
+.detail-stat-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px; }
+.detail-stat {
+  background:var(--bg4); border:1px solid var(--border);
+  border-radius:12px; padding:14px;
+}
+.detail-stat-label { font-size:10px; color:var(--text-muted); margin-bottom:4px; }
+.detail-stat-val { font-size:16px; font-weight:700; font-family:'Tajawal',sans-serif; }
+
+/* ── REPORTS ── */
+.report-section { margin-bottom:20px; }
+.report-row {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:12px 0; border-bottom:1px solid var(--border);
+}
+.report-row:last-child { border-bottom:none; }
+.report-label { font-size:13px; color:var(--text-muted); }
+.report-val { font-size:14px; font-weight:700; }
+
+/* ── AI ANALYSIS ── */
+.ai-card {
+  background:linear-gradient(135deg, rgba(26,188,156,0.08), rgba(52,152,219,0.05));
+  border:1px solid rgba(26,188,156,0.25); border-radius:14px; padding:16px;
+  margin-bottom:12px;
+}
+.ai-header { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+.ai-badge { font-size:10px; font-weight:700; color:var(--teal); }
+.ai-text { font-size:12px; color:#90C8B8; line-height:1.9; }
+
+/* ── CONCENTRATION ALERT ── */
+.concentration-bar {
+  height:6px; background:var(--bg4); border-radius:3px; margin-top:6px;
+  overflow:hidden;
+}
+.concentration-fill {
+  height:100%; border-radius:3px;
+  background:linear-gradient(90deg, var(--green), var(--orange), var(--red));
+}
+
+/* ── EMPTY STATE ── */
+.empty-state {
+  text-align:center; padding:60px 30px;
+}
+.empty-icon { font-size:56px; margin-bottom:16px; }
+.empty-title { font-family:'Tajawal',sans-serif; font-size:18px; font-weight:800; color:#fff; margin-bottom:8px; }
+.empty-text { font-size:13px; color:var(--text-muted); line-height:1.8; }
+
+/* ── TOAST ── */
+.toast {
+  position:fixed; bottom:calc(var(--nav-h) + var(--safe-bottom) + 16px);
+  left:50%; transform:translateX(-50%) translateY(20px);
+  background:var(--bg3); border:1px solid var(--border);
+  border-radius:12px; padding:12px 24px;
+  font-size:13px; font-weight:600;
+  box-shadow:0 8px 32px rgba(0,0,0,0.4);
+  opacity:0; transition:all 0.3s; z-index:999;
+  white-space:nowrap;
+}
+.toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+.toast.success { color:var(--green); border-color:rgba(46,204,113,0.3); }
+.toast.error { color:var(--red); border-color:rgba(231,76,60,0.3); }
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width:0; height:0; }
+
+/* ── FADE UP ANIMATION ── */
+.fade-up { animation:fadeInUp 0.4s ease both; }
+.fade-up-d1 { animation-delay:0.05s; }
+.fade-up-d2 { animation-delay:0.1s; }
+.fade-up-d3 { animation-delay:0.15s; }
+.fade-up-d4 { animation-delay:0.2s; }
+.fade-up-d5 { animation-delay:0.25s; }
+
+/* ── PRICE UPDATE CARD ── */
+.price-card {
+  background:var(--bg3); border:1px solid var(--border);
+  border-radius:14px; padding:14px 16px; margin-bottom:8px;
+  display:flex; align-items:center; gap:12px;
+}
+.price-info { flex:1; }
+.price-name { font-size:13px; font-weight:700; color:#fff; }
+.price-old { font-size:11px; color:var(--text-muted); margin-top:2px; }
+.price-input-wrap { display:flex; align-items:center; gap:8px; }
+.price-input-sm {
+  width:110px; background:var(--bg4); border:1px solid var(--border);
+  border-radius:8px; padding:8px 12px;
+  color:var(--text); font-family:'Cairo',sans-serif; font-size:13px;
+  text-align:center; outline:none;
+}
+.price-input-sm:focus { border-color:var(--gold-border); }
+
+/* ── BIAS DETECTOR ── */
+.bias-card {
+  background:var(--bg3); border:1px solid rgba(231,76,60,0.25);
+  border-radius:14px; padding:16px; margin-bottom:10px;
+  border-right:3px solid var(--red);
+}
+.bias-name { font-size:14px; font-weight:700; color:#fff; margin-bottom:4px; }
+.bias-def { font-size:12px; color:var(--text-muted); line-height:1.7; margin-bottom:8px; }
+.bias-severity {
+  display:inline-block; padding:3px 12px; border-radius:20px;
+  font-size:10px; font-weight:700;
+}
+.sev-high { background:rgba(231,76,60,0.15); color:var(--red); }
+.sev-mid { background:rgba(243,156,18,0.15); color:var(--orange); }
+.sev-low { background:rgba(46,204,113,0.15); color:var(--green); }
+
+/* ── SYNC STATUS ── */
+.sync-status {
+  display:flex; align-items:center; gap:6px;
+  font-size:11px; color:var(--text-muted);
+}
+.sync-dot {
+  width:7px; height:7px; border-radius:50%;
+  background:var(--green);
+  box-shadow:0 0 6px var(--green);
+  animation:blink 2s infinite;
+}
+.sync-dot.offline { background:var(--red); box-shadow:0 0 6px var(--red); animation:none; }
+@keyframes blink { 0%,100%{ opacity:1; } 50%{ opacity:0.3; } }
+
+/* ── GLOW LINE ── */
+.glow-line {
+  height:1px; margin:16px 0;
+  background:linear-gradient(90deg, transparent, var(--gold-dim), transparent);
+}
+
+</style>
+</head>
+<body>
+
+<!-- SPLASH SCREEN -->
+<div id="splash">
+  <div class="splash-glow"></div>
+  <div class="splash-logo">محفظتي</div>
+  <div class="splash-sub">Investment Portfolio Tracker</div>
+  <div class="splash-loader"><div class="splash-loader-bar"></div></div>
+</div>
+
+<!-- BOTTOM NAVIGATION -->
+<nav class="bottom-nav" id="bottomNav">
+  <div class="nav-item active" data-view="dashboard" onclick="navigate('dashboard', this)">
+    <div class="nav-icon">🏠</div>
+    <div class="nav-label">الرئيسية</div>
+  </div>
+  <div class="nav-item" data-view="portfolio" onclick="navigate('portfolio', this)">
+    <div class="nav-icon">📊</div>
+    <div class="nav-label">محفظتي</div>
+  </div>
+  <div class="nav-add" onclick="openAddSheet()">+</div>
+  <div class="nav-item" data-view="reports" onclick="navigate('reports', this)">
+    <div class="nav-icon">📈</div>
+    <div class="nav-label">التقارير</div>
+  </div>
+  <div class="nav-item" data-view="settings" onclick="navigate('settings', this)">
+    <div class="nav-icon">⚙️</div>
+    <div class="nav-label">حسابي</div>
+  </div>
+</nav>
+
+<!-- ════════════════════════════════════ DASHBOARD ════════════════════════════════════ -->
+<div class="view active" id="view-dashboard">
+
+  <div class="topbar">
+    <div>
+      <div class="topbar-greeting" id="greeting">صباح الخير 👋</div>
+      <div class="topbar-title">محفظتي</div>
+    </div>
+    <div class="topbar-actions">
+      <div class="sync-status" id="syncStatus">
+        <div class="sync-dot" id="syncDot"></div>
+        <span id="syncLabel">متصل</span>
+      </div>
+      <div class="icon-btn" onclick="navigate('settings', document.querySelector('[data-view=settings]'))">⚙️</div>
+    </div>
+  </div>
+
+  <!-- Portfolio Summary -->
+  <div class="portfolio-main fade-up card-gold-top">
+    <div class="pm-label">إجمالي قيمة المحفظة</div>
+    <div class="pm-value" id="totalValue">ج.م ٠</div>
+    <div class="pm-row">
+      <div class="pm-stat">
+        <div class="pm-stat-label">ربح / خسارة اليوم</div>
+        <div class="pm-stat-val" id="todayPL">ج.م ٠</div>
+      </div>
+      <div class="pm-stat">
+        <div class="pm-stat-label">إجمالي المستثمر</div>
+        <div class="pm-stat-val neutral" id="totalInvested">ج.م ٠</div>
+      </div>
+      <div class="pm-stat">
+        <div class="pm-stat-label">العائد الكلي</div>
+        <div class="pm-stat-val" id="totalReturn">٠٪</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- KPI Scroll -->
+  <div class="kpi-scroll fade-up fade-up-d1" id="kpiScroll">
+    <div class="kpi-card">
+      <div class="kpi-icon">💰</div>
+      <div class="kpi-label">إجمالي الاستثمار</div>
+      <div class="kpi-val neutral" id="kpi-invested">٠</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-icon">📦</div>
+      <div class="kpi-label">عدد الصناديق</div>
+      <div class="kpi-val" id="kpi-count">٠</div>
+    </div>
+    <div class="kpi-card card-green-top">
+      <div class="kpi-icon">⭐</div>
+      <div class="kpi-label">أفضل صندوق</div>
+      <div class="kpi-val positive" id="kpi-best" style="font-size:12px">—</div>
+    </div>
+    <div class="kpi-card card-red-top">
+      <div class="kpi-icon">📉</div>
+      <div class="kpi-label">أسوأ صندوق</div>
+      <div class="kpi-val negative" id="kpi-worst" style="font-size:12px">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-icon">📅</div>
+      <div class="kpi-label">آخر تحديث</div>
+      <div class="kpi-val" id="kpi-updated" style="font-size:11px">—</div>
+    </div>
+  </div>
+
+  <!-- Alert Banner -->
+  <div class="alert-banner fade-up fade-up-d2" id="concentrationAlert" style="display:none">
+    <span>⚠️</span>
+    <span id="alertText">تركيز عالٍ في المحفظة</span>
+    <span class="alert-close" onclick="this.parentElement.style.display='none'">✕</span>
+  </div>
+
+  <!-- Portfolio Allocation Chart -->
+  <div class="section-hd fade-up fade-up-d2">
+    <div class="section-title">توزيع المحفظة</div>
+    <div class="section-link" onclick="navigate('reports', document.querySelector('[data-view=reports]'))">التفاصيل</div>
+  </div>
+  <div class="pad fade-up fade-up-d3">
+    <div class="card">
+      <div class="chart-wrap">
+        <canvas id="donutChart" width="200" height="200" style="max-width:180px; max-height:180px; margin:0 auto; display:block;"></canvas>
+        <div class="chart-legend" id="donutLegend"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Top Holdings -->
+  <div class="section-hd fade-up fade-up-d3">
+    <div class="section-title">أفضل الصناديق أداءً</div>
+    <div class="section-link" onclick="navigate('portfolio', document.querySelector('[data-view=portfolio]'))">الكل</div>
+  </div>
+  <div class="pad fade-up fade-up-d4" id="topHoldings">
+    <div class="empty-state">
+      <div class="empty-icon">📭</div>
+      <div class="empty-title">لا توجد صناديق بعد</div>
+      <div class="empty-text">ابدأ بإضافة صندوقك الأول<br>بالضغط على زر + في الأسفل</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ════════════════════════════════════ PORTFOLIO ════════════════════════════════════ -->
+<div class="view" id="view-portfolio">
+
+  <div class="topbar">
+    <div class="topbar-title">محفظتي الكاملة</div>
+    <div class="topbar-actions">
+      <div class="icon-btn" onclick="openPriceUpdate()">🔄</div>
+      <div class="icon-btn" onclick="exportCSV()">📤</div>
+    </div>
+  </div>
+
+  <!-- Filter Tabs -->
+  <div class="tabs" id="portfolioTabs">
+    <div class="tab-btn active" onclick="filterPortfolio('all', this)">الكل</div>
+    <div class="tab-btn" onclick="filterPortfolio('stocks', this)">أسهم</div>
+    <div class="tab-btn" onclick="filterPortfolio('gold', this)">ذهب</div>
+    <div class="tab-btn" onclick="filterPortfolio('fixed', this)">دخل ثابت</div>
+    <div class="tab-btn" onclick="filterPortfolio('index', this)">مؤشر</div>
+  </div>
+
+  <div class="pad" id="portfolioList">
+    <div class="empty-state">
+      <div class="empty-icon">📂</div>
+      <div class="empty-title">المحفظة فارغة</div>
+      <div class="empty-text">أضف صناديقك الاستثمارية<br>لبدء التتبع والتحليل</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ════════════════════════════════════ REPORTS ════════════════════════════════════ -->
+<div class="view" id="view-reports">
+
+  <div class="topbar">
+    <div class="topbar-title">التقارير والتحليل</div>
+    <div class="topbar-actions">
+      <div class="icon-btn" onclick="openBiasDetector()">🧬</div>
+    </div>
+  </div>
+
+  <div class="pad">
+
+    <!-- Summary Card -->
+    <div class="card card-gold-top fade-up">
+      <div class="section-title" style="margin-bottom:14px">ملخص الأداء الكلي</div>
+      <div class="detail-stat-grid" id="reportSummary">
+        <div class="detail-stat">
+          <div class="detail-stat-label">إجمالي المستثمر</div>
+          <div class="detail-stat-val neutral" id="r-invested">ج.م ٠</div>
+        </div>
+        <div class="detail-stat">
+          <div class="detail-stat-label">القيمة الحالية</div>
+          <div class="detail-stat-val" id="r-current">ج.م ٠</div>
+        </div>
+        <div class="detail-stat">
+          <div class="detail-stat-label">صافي الربح</div>
+          <div class="detail-stat-val" id="r-profit">ج.م ٠</div>
+        </div>
+        <div class="detail-stat">
+          <div class="detail-stat-label">العائد الحقيقي*</div>
+          <div class="detail-stat-val" id="r-real">٠٪</div>
+        </div>
+      </div>
+      <div style="font-size:10px; color:var(--text-muted)">* بعد خصم التضخم المصري (25٪ تقريبياً)</div>
+    </div>
+
+    <!-- AI Analysis -->
+    <div class="ai-card fade-up fade-up-d1" id="aiAnalysis">
+      <div class="ai-header">
+        <span style="font-size:20px">🧠</span>
+        <span class="ai-badge">تحليل ذكي</span>
+      </div>
+      <div class="ai-text" id="aiText">أضف صناديق لبدء التحليل الذكي...</div>
+    </div>
+
+    <!-- Concentration Risk -->
+    <div class="card fade-up fade-up-d2">
+      <div class="section-title" style="margin-bottom:14px">خطر التركيز</div>
+      <div id="concentrationList">
+        <div style="color:var(--text-muted); font-size:12px; text-align:center; padding:20px">لا توجد بيانات</div>
+      </div>
+    </div>
+
+    <!-- Distribution Chart -->
+    <div class="card fade-up fade-up-d3">
+      <div class="section-title" style="margin-bottom:14px">توزيع الفئات</div>
+      <div class="chart-wrap">
+        <canvas id="barChart" width="300" height="160"></canvas>
+      </div>
+    </div>
+
+    <!-- Transactions Timeline -->
+    <div class="section-title" style="padding:0 0 12px; margin-top:8px; font-size:15px">سجل العمليات</div>
+    <div id="transactionTimeline">
+      <div style="color:var(--text-muted); font-size:12px; text-align:center; padding:20px">لا توجد عمليات</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ════════════════════════════════════ SETTINGS ════════════════════════════════════ -->
+<div class="view" id="view-settings">
+  <div class="topbar">
+    <div class="topbar-title">الإعدادات</div>
+  </div>
+  <div class="pad">
+
+    <div class="card fade-up">
+      <div class="section-title" style="margin-bottom:16px; font-size:15px">🔗 ربط Google Sheets</div>
+      <div class="form-group">
+        <label class="form-label">معرّف جدول البيانات (Spreadsheet ID)</label>
+        <input class="form-input" id="sheetId" placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms" value="">
+      </div>
+      <div class="form-group">
+        <label class="form-label">API Key (Google Sheets)</label>
+        <input class="form-input" id="apiKey" placeholder="AIza..." value="" type="password">
+      </div>
+      <div class="form-group">
+        <label class="form-label">اسم تبويب المعاملات (Transactions Tab)</label>
+        <input class="form-input" id="transTab" value="transactions">
+      </div>
+      <div class="form-group">
+        <label class="form-label">اسم تبويب الأسعار (Rates Tab)</label>
+        <input class="form-input" id="ratesTab" value="rates">
+      </div>
+      <div style="display:flex; gap:10px; margin-top:8px;">
+        <button class="btn-outline" style="flex:1" onclick="testConnection()">اختبار الاتصال</button>
+        <button class="btn-primary" style="flex:1" onclick="saveSettings()">حفظ</button>
+      </div>
+    </div>
+
+    <div class="card fade-up fade-up-d1">
+      <div class="section-title" style="margin-bottom:16px; font-size:15px">📋 تعليمات الإعداد</div>
+      <div style="font-size:12px; color:var(--text-muted); line-height:2;">
+        <div style="margin-bottom:8px">١. افتح <strong style="color:var(--gold)">Google Sheets</strong> وأنشئ جدول جديد</div>
+        <div style="margin-bottom:8px">٢. أضف تبويبين: <span class="badge badge-gold">transactions</span> و <span class="badge badge-blue">rates</span></div>
+        <div style="margin-bottom:8px">٣. في تبويب <strong>transactions</strong>، الأعمدة:<br>
+          <span style="color:var(--text); font-size:11px; background:var(--bg4); padding:4px 8px; border-radius:6px; display:inline-block; margin-top:4px; font-family:monospace;">
+          التاريخ | اسم الصندوق | النوع | المدير | نوع العملية | المبلغ | سعر الوحدة | هدف الاستثمار | الأفق الزمني | سبب الاختيار | قاعدة الخروج | التقييم
+          </span>
+        </div>
+        <div style="margin-bottom:8px">٤. في تبويب <strong>rates</strong>، الأعمدة:<br>
+          <span style="color:var(--text); font-size:11px; background:var(--bg4); padding:4px 8px; border-radius:6px; display:inline-block; margin-top:4px; font-family:monospace;">
+          اسم الصندوق | السعر الحالي | تاريخ التحديث | التغيير يومي٪
+          </span>
+        </div>
+        <div>٥. من إعدادات الورقة، انشر كـ API واحصل على <strong style="color:var(--gold)">Spreadsheet ID</strong> من الرابط</div>
+      </div>
+    </div>
+
+    <div class="card fade-up fade-up-d2">
+      <div class="section-title" style="margin-bottom:16px; font-size:15px">⚡ الوضع التجريبي</div>
+      <div style="font-size:12px; color:var(--text-muted); line-height:1.8; margin-bottom:14px;">
+        لاختبار التطبيق بدون Google Sheets، يمكنك استخدام بيانات تجريبية محلية.
+      </div>
+      <button class="btn-outline" onclick="loadDemoData()">تحميل بيانات تجريبية</button>
+    </div>
+
+    <div class="card fade-up fade-up-d3">
+      <div class="section-title" style="margin-bottom:16px; font-size:15px">ℹ️ عن التطبيق</div>
+      <div style="font-size:12px; color:var(--text-muted); line-height:2;">
+        <div>الإصدار: <strong style="color:var(--gold)">1.0.0</strong></div>
+        <div>محفظتي — Investment Portfolio Tracker</div>
+        <div>لمتابعة صناديق الاستثمار المصرية</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ════════════ SHEETS ════════════ -->
+
+<!-- Add Transaction Sheet -->
+<div class="sheet-overlay" id="addSheet">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">➕ إضافة صندوق / عملية</div>
+
+    <!-- Steps -->
+    <div class="step-bar">
+      <div class="step-progress"><div class="step-fill" id="stepFill" style="width:33%"></div></div>
+      <div class="step-labels">
+        <div class="step-label active" id="sl1">الصندوق</div>
+        <div class="step-label" id="sl2">التفاصيل</div>
+        <div class="step-label" id="sl3">التحليل</div>
+      </div>
+    </div>
+
+    <!-- Step 1: Fund Info -->
+    <div id="addStep1">
+      <div class="form-group">
+        <label class="form-label">اسم الصندوق *</label>
+        <input class="form-input" id="f-name" placeholder="مثال: أزيموت — نمو متوازن" list="fundsDatalist">
+        <datalist id="fundsDatalist">
+          <option value="أزيموت — نمو متوازن">
+          <option value="أزيموت — خماسي">
+          <option value="بلتون — نمو">
+          <option value="بلتون — مرن">
+          <option value="هيرميس — أسهم">
+          <option value="هيرميس — ذهب">
+          <option value="الأهلي — مرن">
+          <option value="الأهلي — دخل">
+          <option value="بريمو — دخل ثابت">
+          <option value="سيتي — نمو">
+          <option value="إتش سي — أسهم">
+          <option value="فاليو — نمو">
+          <option value="EGID — مؤشر">
+        </datalist>
+      </div>
+      <div class="form-group">
+        <label class="form-label">نوع الصندوق *</label>
+        <div class="segmented" id="fundTypeCtrl">
+          <div class="seg-opt active" onclick="selectSeg(this,'fundTypeCtrl')" data-val="أسهم">أسهم</div>
+          <div class="seg-opt" onclick="selectSeg(this,'fundTypeCtrl')" data-val="ذهب">ذهب</div>
+          <div class="seg-opt" onclick="selectSeg(this,'fundTypeCtrl')" data-val="دخل ثابت">دخل ثابت</div>
+          <div class="seg-opt" onclick="selectSeg(this,'fundTypeCtrl')" data-val="مؤشر">مؤشر</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">مدير الصندوق</label>
+        <select class="form-select" id="f-manager">
+          <option value="">اختر مدير الصندوق</option>
+          <option>أزيموت</option><option>بلتون</option><option>هيرميس</option>
+          <option>الأهلي</option><option>بريمو</option><option>سيتي</option>
+          <option>إتش سي</option><option>فاليو</option><option>آخر</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">نوع العملية *</label>
+        <div class="segmented" id="opTypeCtrl">
+          <div class="seg-opt active" onclick="selectSeg(this,'opTypeCtrl')" data-val="شراء">شراء</div>
+          <div class="seg-opt" onclick="selectSeg(this,'opTypeCtrl')" data-val="بيع">بيع</div>
+          <div class="seg-opt" onclick="selectSeg(this,'opTypeCtrl')" data-val="قسط شهري">قسط</div>
+        </div>
+      </div>
+      <button class="btn-primary" onclick="nextStep(2)">التالي ←</button>
+    </div>
+
+    <!-- Step 2: Financial Details -->
+    <div id="addStep2" style="display:none">
+      <div class="form-group">
+        <label class="form-label">المبلغ المستثمر (ج.م) *</label>
+        <input class="form-input" id="f-amount" type="number" placeholder="٠" min="1">
+      </div>
+      <div class="form-group">
+        <label class="form-label">تاريخ العملية *</label>
+        <input class="form-input" id="f-date" type="date">
+      </div>
+      <div class="form-group">
+        <label class="form-label">سعر الوحدة وقت الشراء (اختياري)</label>
+        <input class="form-input" id="f-unitprice" type="number" placeholder="٠.٠٠" step="0.01">
+      </div>
+      <div class="form-group">
+        <label class="form-label">هدف الاستثمار *</label>
+        <div class="segmented" id="goalCtrl">
+          <div class="seg-opt active" onclick="selectSeg(this,'goalCtrl')" data-val="نمو">نمو</div>
+          <div class="seg-opt" onclick="selectSeg(this,'goalCtrl')" data-val="دخل">دخل</div>
+          <div class="seg-opt" onclick="selectSeg(this,'goalCtrl')" data-val="تحوط">تحوط</div>
+          <div class="seg-opt" onclick="selectSeg(this,'goalCtrl')" data-val="مضاربة">مضاربة</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">الأفق الزمني</label>
+        <div class="segmented" id="horizonCtrl">
+          <div class="seg-opt active" onclick="selectSeg(this,'horizonCtrl')" data-val="قصير">قصير</div>
+          <div class="seg-opt" onclick="selectSeg(this,'horizonCtrl')" data-val="متوسط">متوسط</div>
+          <div class="seg-opt" onclick="selectSeg(this,'horizonCtrl')" data-val="طويل">طويل</div>
+        </div>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button class="btn-outline" style="flex:1" onclick="nextStep(1)">← السابق</button>
+        <button class="btn-primary" style="flex:1" onclick="nextStep(3)">التالي ←</button>
+      </div>
+    </div>
+
+    <!-- Step 3: Analysis -->
+    <div id="addStep3" style="display:none">
+      <div class="form-group">
+        <label class="form-label">سبب الاختيار * (مهم للتحليل)</label>
+        <textarea class="form-input" id="f-reason" placeholder="لماذا اخترت هذا الصندوق؟ ما الذي أقنعك؟"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">قاعدة الخروج (متى ستبيع؟)</label>
+        <textarea class="form-input" id="f-exit" placeholder="مثال: إذا تراجع بأكثر من 15٪ أو حقق 30٪ ربح"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">تقييم القرار</label>
+        <div class="segmented" id="ratingCtrl">
+          <div class="seg-opt active" onclick="selectSeg(this,'ratingCtrl')" data-val="ممتاز">⭐ ممتاز</div>
+          <div class="seg-opt" onclick="selectSeg(this,'ratingCtrl')" data-val="جيد">✓ جيد</div>
+          <div class="seg-opt" onclick="selectSeg(this,'ratingCtrl')" data-val="تجريبي">🧪 تجريبي</div>
+        </div>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button class="btn-outline" style="flex:1" onclick="nextStep(2)">← السابق</button>
+        <button class="btn-primary" style="flex:1" id="saveBtn" onclick="saveTransaction()">💾 حفظ العملية</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Price Update Sheet -->
+<div class="sheet-overlay" id="priceSheet">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">🔄 تحديث أسعار الصناديق</div>
+    <div id="priceUpdateList">
+      <div style="color:var(--text-muted); text-align:center; padding:30px; font-size:13px">لا توجد صناديق لتحديثها</div>
+    </div>
+    <div style="margin-top:16px; display:flex; gap:10px;">
+      <button class="btn-outline" style="flex:1" onclick="closePriceSheet()">إلغاء</button>
+      <button class="btn-primary" style="flex:1" onclick="savePrices()">💾 حفظ الأسعار</button>
+    </div>
+  </div>
+</div>
+
+<!-- Fund Detail Sheet -->
+<div class="sheet-overlay" id="detailSheet">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div id="detailContent"></div>
+  </div>
+</div>
+
+<!-- Bias Detector Sheet -->
+<div class="sheet-overlay" id="biasSheet">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">🧬 كاشف التحيزات السلوكية</div>
+    <div id="biasContent"></div>
+    <button class="btn-outline" style="margin-top:12px" onclick="closeSheet('biasSheet')">إغلاق</button>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════════
+const INFLATION = 25; // تضخم مصر تقريبي
+let config = {
+  sheetId: localStorage.getItem('sheetId') || '',
+  apiKey: localStorage.getItem('apiKey') || '',
+  transTab: localStorage.getItem('transTab') || 'transactions',
+  ratesTab: localStorage.getItem('ratesTab') || 'rates'
+};
+
+// Load config into form
+document.getElementById('sheetId').value = config.sheetId;
+document.getElementById('apiKey').value = config.apiKey;
+document.getElementById('transTab').value = config.transTab;
+document.getElementById('ratesTab').value = config.ratesTab;
+
+// ═══════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════
+let transactions = JSON.parse(localStorage.getItem('transactions') || '[]');
+let rates = JSON.parse(localStorage.getItem('rates') || '{}');
+let currentFilter = 'all';
+let charts = {};
+
+// ═══════════════════════════════════════════════════════
+// SPLASH
+// ═══════════════════════════════════════════════════════
+setTimeout(() => {
+  document.getElementById('splash').classList.add('hidden');
+  setTimeout(() => {
+    document.getElementById('splash').style.display = 'none';
+    refreshAll();
+  }, 500);
+}, 2500);
+
+// ═══════════════════════════════════════════════════════
+// GREETING
+// ═══════════════════════════════════════════════════════
+function setGreeting() {
+  const h = new Date().getHours();
+  const g = h < 12 ? 'صباح الخير' : h < 17 ? 'مساء الخير' : 'مساء النور';
+  document.getElementById('greeting').textContent = g + ' 👋';
+}
+setGreeting();
+
+// ═══════════════════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════════════════
+function navigate(view, el) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-' + view).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  if (el) el.classList.add('active');
+  if (view === 'dashboard') refreshDashboard();
+  if (view === 'portfolio') renderPortfolio();
+  if (view === 'reports') refreshReports();
+}
+
+// ═══════════════════════════════════════════════════════
+// SHEETS OVERLAY
+// ═══════════════════════════════════════════════════════
+function openSheet(id) {
+  document.getElementById(id).classList.add('open');
+}
+function closeSheet(id) {
+  document.getElementById(id).classList.remove('open');
+}
+// Close on overlay click
+document.querySelectorAll('.sheet-overlay').forEach(ov => {
+  ov.addEventListener('click', e => { if (e.target === ov) closeSheet(ov.id); });
+});
+
+// ═══════════════════════════════════════════════════════
+// SEGMENTED CONTROL
+// ═══════════════════════════════════════════════════════
+function selectSeg(el, groupId) {
+  document.querySelectorAll('#' + groupId + ' .seg-opt').forEach(o => o.classList.remove('active'));
+  el.classList.add('active');
+}
+function getSegVal(groupId) {
+  const active = document.querySelector('#' + groupId + ' .seg-opt.active');
+  return active ? active.dataset.val : '';
+}
+
+// ═══════════════════════════════════════════════════════
+// ADD TRANSACTION - MULTI STEP
+// ═══════════════════════════════════════════════════════
+let currentStep = 1;
+function openAddSheet() {
+  resetAddForm();
+  openSheet('addSheet');
+}
+function resetAddForm() {
+  currentStep = 1;
+  showStep(1);
+  ['f-name','f-amount','f-date','f-unitprice','f-reason','f-exit'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('f-date').value = new Date().toISOString().slice(0,10);
+  // Reset segs
+  ['fundTypeCtrl','opTypeCtrl','goalCtrl','horizonCtrl','ratingCtrl'].forEach(id => {
+    const opts = document.querySelectorAll('#' + id + ' .seg-opt');
+    opts.forEach((o,i) => { o.classList.toggle('active', i===0); });
+  });
+}
+function showStep(n) {
+  [1,2,3].forEach(i => {
+    document.getElementById('addStep'+i).style.display = i===n ? 'block' : 'none';
+    document.getElementById('sl'+i).classList.toggle('active', i===n);
+  });
+  const fills = {1:'33%', 2:'66%', 3:'100%'};
+  document.getElementById('stepFill').style.width = fills[n];
+}
+function nextStep(n) {
+  if (n > currentStep) {
+    if (!validateStep(currentStep)) return;
+  }
+  currentStep = n;
+  showStep(n);
+}
+function validateStep(n) {
+  if (n === 1) {
+    const name = document.getElementById('f-name').value.trim();
+    if (!name) { showToast('أدخل اسم الصندوق', 'error'); return false; }
+  }
+  if (n === 2) {
+    const amount = document.getElementById('f-amount').value;
+    if (!amount || +amount <= 0) { showToast('أدخل المبلغ المستثمر', 'error'); return false; }
+    const date = document.getElementById('f-date').value;
+    if (!date) { showToast('أدخل تاريخ العملية', 'error'); return false; }
+  }
+  return true;
+}
+async function saveTransaction() {
+  if (!validateStep(3)) return;
+  const reason = document.getElementById('f-reason').value.trim();
+  if (!reason) { showToast('سبب الاختيار مطلوب', 'error'); return; }
+
+  const tx = {
+    id: Date.now(),
+    date: document.getElementById('f-date').value,
+    name: document.getElementById('f-name').value.trim(),
+    type: getSegVal('fundTypeCtrl'),
+    manager: document.getElementById('f-manager').value,
+    opType: getSegVal('opTypeCtrl'),
+    amount: +document.getElementById('f-amount').value,
+    unitPrice: +document.getElementById('f-unitprice').value || 0,
+    goal: getSegVal('goalCtrl'),
+    horizon: getSegVal('horizonCtrl'),
+    reason: reason,
+    exitRule: document.getElementById('f-exit').value.trim(),
+    rating: getSegVal('ratingCtrl'),
+    currentPrice: 0
+  };
+
+  transactions.push(tx);
+  localStorage.setItem('transactions', JSON.stringify(transactions));
+
+  // Save to Google Sheets
+  await saveToSheets(tx);
+
+  closeSheet('addSheet');
+  showToast('✅ تم حفظ العملية بنجاح', 'success');
+  refreshAll();
+}
+
+// ═══════════════════════════════════════════════════════
+// GOOGLE SHEETS INTEGRATION
+// ═══════════════════════════════════════════════════════
+async function saveToSheets(tx) {
+  if (!config.sheetId || !config.apiKey) return;
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/${encodeURIComponent(config.transTab + '!A1')}:append?valueInputOption=USER_ENTERED&key=${config.apiKey}`;
+  const row = [
+    tx.date, tx.name, tx.type, tx.manager, tx.opType,
+    tx.amount, tx.unitPrice, tx.goal, tx.horizon,
+    tx.reason, tx.exitRule, tx.rating
+  ];
+  try {
+    const resp = await fetch(url, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ values: [row] })
+    });
+    if (!resp.ok) throw new Error('Sheets error');
+    updateSyncStatus(true);
+  } catch(e) {
+    updateSyncStatus(false);
+    console.warn('Sheets save failed:', e);
+  }
+}
+
+async function saveRatesToSheets(rateRows) {
+  if (!config.sheetId || !config.apiKey) return;
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/${encodeURIComponent(config.ratesTab + '!A1')}?valueInputOption=USER_ENTERED&key=${config.apiKey}`;
+  const header = ['اسم الصندوق','السعر الحالي','تاريخ التحديث','التغيير اليومي٪'];
+  const values = [header, ...rateRows];
+  try {
+    await fetch(url, {
+      method:'PUT',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ values })
+    });
+    updateSyncStatus(true);
+  } catch(e) {
+    updateSyncStatus(false);
+  }
+}
+
+async function loadFromSheets() {
+  if (!config.sheetId || !config.apiKey) return;
+  try {
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/${encodeURIComponent(config.transTab)}?key=${config.apiKey}`;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error('fetch failed');
+    const data = await resp.json();
+    const rows = (data.values || []).slice(1); // skip header
+    transactions = rows.map((r,i) => ({
+      id: i+1,
+      date: r[0]||'', name: r[1]||'', type: r[2]||'أسهم',
+      manager: r[3]||'', opType: r[4]||'شراء',
+      amount: +r[5]||0, unitPrice: +r[6]||0,
+      goal: r[7]||'', horizon: r[8]||'',
+      reason: r[9]||'', exitRule: r[10]||'', rating: r[11]||'',
+      currentPrice: 0
+    }));
+    localStorage.setItem('transactions', JSON.stringify(transactions));
+
+    // Load rates
+    const rUrl = `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/${encodeURIComponent(config.ratesTab)}?key=${config.apiKey}`;
+    const rResp = await fetch(rUrl);
+    if (rResp.ok) {
+      const rData = await rResp.json();
+      const rRows = (rData.values || []).slice(1);
+      rRows.forEach(r => { if (r[0] && r[1]) rates[r[0]] = { price: +r[1], date: r[2]||'', change: +r[3]||0 }; });
+      localStorage.setItem('rates', JSON.stringify(rates));
+    }
+    updateSyncStatus(true);
+    refreshAll();
+    showToast('✅ تم تحميل البيانات من Sheets', 'success');
+  } catch(e) {
+    updateSyncStatus(false);
+    showToast('❌ فشل تحميل البيانات', 'error');
+  }
+}
+
+async function testConnection() {
+  saveSettings(false);
+  if (!config.sheetId || !config.apiKey) { showToast('أدخل Sheet ID وAPI Key', 'error'); return; }
+  showToast('🔄 جاري الاتصال...', '');
+  await loadFromSheets();
+}
+
+function saveSettings(showMsg=true) {
+  config.sheetId = document.getElementById('sheetId').value.trim();
+  config.apiKey = document.getElementById('apiKey').value.trim();
+  config.transTab = document.getElementById('transTab').value.trim() || 'transactions';
+  config.ratesTab = document.getElementById('ratesTab').value.trim() || 'rates';
+  localStorage.setItem('sheetId', config.sheetId);
+  localStorage.setItem('apiKey', config.apiKey);
+  localStorage.setItem('transTab', config.transTab);
+  localStorage.setItem('ratesTab', config.ratesTab);
+  if (showMsg) showToast('✅ تم حفظ الإعدادات', 'success');
+}
+
+function updateSyncStatus(ok) {
+  const dot = document.getElementById('syncDot');
+  const lbl = document.getElementById('syncLabel');
+  dot.classList.toggle('offline', !ok);
+  lbl.textContent = ok ? 'متصل' : 'غير متصل';
+}
+
+// ═══════════════════════════════════════════════════════
+// COMPUTED DATA
+// ═══════════════════════════════════════════════════════
+function getPortfolio() {
+  // Aggregate by fund name
+  const map = {};
+  transactions.forEach(tx => {
+    if (!map[tx.name]) {
+      map[tx.name] = {
+        name: tx.name, type: tx.type, manager: tx.manager,
+        invested: 0, opCount: 0, goal: tx.goal, horizon: tx.horizon,
+        reason: tx.reason, exitRule: tx.exitRule, rating: tx.rating,
+        firstDate: tx.date, lastDate: tx.date, transactions: []
+      };
+    }
+    const f = map[tx.name];
+    if (tx.opType === 'بيع') {
+      f.invested -= tx.amount;
+    } else {
+      f.invested += tx.amount;
+    }
+    f.opCount++;
+    f.transactions.push(tx);
+    if (tx.date < f.firstDate) f.firstDate = tx.date;
+    if (tx.date > f.lastDate) f.lastDate = tx.date;
+  });
+
+  // Attach rates
+  return Object.values(map).map(f => {
+    const rateInfo = rates[f.name];
+    const currentPrice = rateInfo ? rateInfo.price : 0;
+    const dailyChange = rateInfo ? rateInfo.change : 0;
+    // If we have current price and unit prices, estimate current value
+    // Otherwise use invested as current value
+    const currentValue = f.invested; // simplified — can be enhanced with unit price tracking
+    return { ...f, currentValue, currentPrice, dailyChange };
+  }).filter(f => f.invested > 0);
+}
+
+function getStats(portfolio) {
+  const totalInvested = portfolio.reduce((s,f) => s + f.invested, 0);
+  const totalValue = portfolio.reduce((s,f) => s + f.currentValue, 0);
+  const profit = totalValue - totalInvested;
+  const returnPct = totalInvested > 0 ? ((profit / totalInvested) * 100) : 0;
+  const realReturn = returnPct - INFLATION;
+  return { totalInvested, totalValue, profit, returnPct, realReturn };
+}
+
+function getTypeDistribution(portfolio) {
+  const map = {};
+  portfolio.forEach(f => {
+    map[f.type] = (map[f.type] || 0) + f.invested;
+  });
+  return map;
+}
+
+function getManagerConcentration(portfolio) {
+  const total = portfolio.reduce((s,f) => s + f.invested, 0);
+  const map = {};
+  portfolio.forEach(f => {
+    const key = f.manager || f.name;
+    map[key] = (map[key] || 0) + f.invested;
+  });
+  return Object.entries(map).map(([k,v]) => ({ name:k, amount:v, pct: total > 0 ? (v/total)*100 : 0 }))
+    .sort((a,b) => b.pct - a.pct);
+}
+
+// ═══════════════════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════════════════
+function refreshDashboard() {
+  const portfolio = getPortfolio();
+  const stats = getStats(portfolio);
+
+  // Main card
+  document.getElementById('totalValue').textContent = 'ج.م ' + fmtNum(stats.totalValue);
+  const todayPL = portfolio.reduce((s,f) => s + (f.dailyChange || 0) * f.invested / 100, 0);
+  const plEl = document.getElementById('todayPL');
+  plEl.textContent = (todayPL >= 0 ? '+' : '') + 'ج.م ' + fmtNum(todayPL);
+  plEl.className = 'pm-stat-val ' + (todayPL >= 0 ? 'positive' : 'negative');
+  document.getElementById('totalInvested').textContent = 'ج.م ' + fmtNum(stats.totalInvested);
+  const retEl = document.getElementById('totalReturn');
+  retEl.textContent = (stats.returnPct >= 0 ? '+' : '') + stats.returnPct.toFixed(1) + '٪';
+  retEl.className = 'pm-stat-val ' + (stats.returnPct >= 0 ? 'positive' : 'negative');
+
+  // KPIs
+  document.getElementById('kpi-invested').textContent = 'ج.م ' + fmtNum(stats.totalInvested);
+  document.getElementById('kpi-count').textContent = portfolio.length;
+  document.getElementById('kpi-updated').textContent = new Date().toLocaleDateString('ar-EG');
+
+  const sorted = [...portfolio].sort((a,b) => b.dailyChange - a.dailyChange);
+  if (sorted.length > 0) {
+    document.getElementById('kpi-best').textContent = sorted[0].name.slice(0,12);
+    document.getElementById('kpi-worst').textContent = sorted[sorted.length-1].name.slice(0,12);
+  }
+
+  // Concentration alert
+  const conc = getManagerConcentration(portfolio);
+  const high = conc.find(c => c.pct > 30);
+  const alertEl = document.getElementById('concentrationAlert');
+  if (high) {
+    alertEl.style.display = 'flex';
+    document.getElementById('alertText').textContent = `⚠️ تركيز عالٍ في ${high.name} (${high.pct.toFixed(0)}٪) — يُنصح بالتنويع`;
+  } else {
+    alertEl.style.display = 'none';
+  }
+
+  // Donut chart
+  renderDonut(portfolio);
+
+  // Top holdings
+  renderTopHoldings(portfolio);
+}
+
+function renderDonut(portfolio) {
+  const dist = getTypeDistribution(portfolio);
+  const labels = Object.keys(dist);
+  const values = Object.values(dist);
+  const colors = { 'أسهم':'#3498DB', 'ذهب':'#C9A84C', 'دخل ثابت':'#2ECC71', 'مؤشر':'#9B59B6' };
+  const bgColors = labels.map(l => colors[l] || '#8A8880');
+
+  if (charts.donut) { charts.donut.destroy(); }
+  const ctx = document.getElementById('donutChart').getContext('2d');
+
+  if (!labels.length) {
+    ctx.clearRect(0,0,200,200);
+    return;
+  }
+
+  charts.donut = new Chart(ctx, {
+    type:'doughnut',
+    data:{ labels, datasets:[{ data:values, backgroundColor:bgColors, borderWidth:0, hoverOffset:4 }] },
+    options:{
+      responsive:true, maintainAspectRatio:true,
+      cutout:'72%',
+      plugins:{ legend:{ display:false }, tooltip:{
+        callbacks:{ label: ctx => ` ${ctx.label}: ج.م ${fmtNum(ctx.raw)} (${((ctx.raw / values.reduce((a,b)=>a+b,0))*100).toFixed(0)}٪)` }
+      }}
+    }
+  });
+
+  // Legend
+  const leg = document.getElementById('donutLegend');
+  leg.innerHTML = labels.map((l,i) => `<div class="legend-item"><div class="legend-dot" style="background:${bgColors[i]}"></div>${l}</div>`).join('');
+}
+
+function renderTopHoldings(portfolio) {
+  const top = [...portfolio].sort((a,b) => b.invested - a.invested).slice(0,5);
+  const el = document.getElementById('topHoldings');
+  if (!top.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-title">لا توجد صناديق بعد</div><div class="empty-text">ابدأ بإضافة صندوقك الأول<br>بالضغط على زر + في الأسفل</div></div>`;
+    return;
+  }
+  const typeIcons = { 'أسهم':'📊', 'ذهب':'🥇', 'دخل ثابت':'🏦', 'مؤشر':'📈' };
+  el.innerHTML = top.map(f => {
+    const chg = f.dailyChange || 0;
+    return `<div class="fund-item" onclick="openFundDetail('${f.name}')">
+      <div class="fund-avatar">${typeIcons[f.type]||'💼'}</div>
+      <div class="fund-info">
+        <div class="fund-name">${f.name}</div>
+        <div class="fund-meta">${f.manager||'—'} · ج.م ${fmtNum(f.invested)}</div>
+      </div>
+      <div class="fund-return">
+        <div class="fund-pct ${chg>=0?'positive':'negative'}">${chg>=0?'+':''}${chg.toFixed(1)}٪</div>
+        <div class="fund-change">${f.type}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+// PORTFOLIO LIST
+// ═══════════════════════════════════════════════════════
+function filterPortfolio(type, el) {
+  currentFilter = type;
+  document.querySelectorAll('#portfolioTabs .tab-btn').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderPortfolio();
+}
+
+function renderPortfolio() {
+  const portfolio = getPortfolio();
+  let filtered = portfolio;
+  const typeMap = { stocks:'أسهم', gold:'ذهب', fixed:'دخل ثابت', index:'مؤشر' };
+  if (currentFilter !== 'all' && typeMap[currentFilter]) {
+    filtered = portfolio.filter(f => f.type === typeMap[currentFilter]);
+  }
+
+  const el = document.getElementById('portfolioList');
+  if (!filtered.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">📂</div><div class="empty-title">لا توجد صناديق</div><div class="empty-text">لا توجد صناديق في هذه الفئة</div></div>`;
+    return;
+  }
+
+  const typeIcons = { 'أسهم':'📊', 'ذهب':'🥇', 'دخل ثابت':'🏦', 'مؤشر':'📈' };
+  const total = filtered.reduce((s,f) => s + f.invested, 0);
+
+  el.innerHTML = filtered.map(f => {
+    const pct = total > 0 ? (f.invested / total * 100) : 0;
+    const chg = f.dailyChange || 0;
+    const ratingBadge = { 'ممتاز':'badge-green', 'جيد':'badge-gold', 'تجريبي':'badge-blue' }[f.rating] || 'badge-blue';
+    return `<div class="fund-item" onclick="openFundDetail('${f.name}')">
+      <div class="fund-avatar">${typeIcons[f.type]||'💼'}</div>
+      <div class="fund-info">
+        <div class="fund-name">${f.name}</div>
+        <div class="fund-meta">${f.manager||'—'} · <span class="badge ${ratingBadge}">${f.rating||'—'}</span></div>
+        <div style="margin-top:6px">
+          <div class="concentration-bar"><div class="concentration-fill" style="width:${pct}%"></div></div>
+          <div style="font-size:10px;color:var(--text-muted);margin-top:2px">${pct.toFixed(0)}٪ من المحفظة</div>
+        </div>
+      </div>
+      <div class="fund-return">
+        <div class="fund-pct ${chg>=0?'positive':'negative'}">${chg>=0?'+':''}${chg.toFixed(1)}٪</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:2px;text-align:left">ج.م ${fmtNum(f.invested)}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+// FUND DETAIL
+// ═══════════════════════════════════════════════════════
+function openFundDetail(name) {
+  const portfolio = getPortfolio();
+  const f = portfolio.find(p => p.name === name);
+  if (!f) return;
+
+  const total = portfolio.reduce((s,f) => s + f.invested, 0);
+  const pct = total > 0 ? (f.invested / total * 100) : 0;
+  const typeIcons = { 'أسهم':'📊', 'ذهب':'🥇', 'دخل ثابت':'🏦', 'مؤشر':'📈' };
+
+  const alertHtml = pct > 30 ? `<div class="alert-banner" style="margin:0 0 12px"><span>⚠️</span><span>تركيز عالٍ — ${pct.toFixed(0)}٪ من المحفظة</span></div>` : '';
+
+  document.getElementById('detailContent').innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+      <div class="fund-avatar" style="width:52px;height:52px;font-size:24px">${typeIcons[f.type]||'💼'}</div>
+      <div>
+        <div style="font-size:17px;font-weight:700;color:#fff">${f.name}</div>
+        <div style="font-size:12px;color:var(--text-muted)">${f.manager||'—'} · <span class="badge badge-gold">${f.type}</span></div>
+      </div>
+    </div>
+    ${alertHtml}
+    <div class="detail-stat-grid">
+      <div class="detail-stat"><div class="detail-stat-label">المبلغ المستثمر</div><div class="detail-stat-val neutral">ج.م ${fmtNum(f.invested)}</div></div>
+      <div class="detail-stat"><div class="detail-stat-label">٪ من المحفظة</div><div class="detail-stat-val">${pct.toFixed(1)}٪</div></div>
+      <div class="detail-stat"><div class="detail-stat-label">عدد العمليات</div><div class="detail-stat-val">${f.opCount}</div></div>
+      <div class="detail-stat"><div class="detail-stat-label">تاريخ الدخول</div><div class="detail-stat-val" style="font-size:13px">${f.firstDate}</div></div>
+    </div>
+    <div class="ai-card">
+      <div class="ai-header"><span>🧠</span><span class="ai-badge">تحليل الصندوق</span></div>
+      <div class="ai-text">${generateFundAI(f, pct)}</div>
+    </div>
+    <div class="glow-line"></div>
+    <div style="font-size:13px;color:var(--text-muted);line-height:1.8;margin-bottom:12px">
+      <div><strong style="color:var(--gold)">هدف الاستثمار:</strong> ${f.goal||'—'}</div>
+      <div><strong style="color:var(--gold)">الأفق الزمني:</strong> ${f.horizon||'—'}</div>
+      <div><strong style="color:var(--gold)">سبب الاختيار:</strong> ${f.reason||'—'}</div>
+      <div><strong style="color:var(--gold)">قاعدة الخروج:</strong> ${f.exitRule||'—'}</div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn-outline" style="flex:1;min-width:100px" onclick="closeSheet('detailSheet');setTimeout(()=>openAddSheet(),300)">+ إضافة قسط</button>
+      <button class="btn-danger" onclick="deleteFund('${f.name}')">حذف</button>
+    </div>
+  `;
+  openSheet('detailSheet');
+}
+
+function generateFundAI(f, pct) {
+  let msgs = [];
+  if (pct > 40) msgs.push(`🔴 هذا الصندوق يمثل ${pct.toFixed(0)}٪ من محفظتك — خطر تركيز عالٍ. يُنصح بالتنويع.`);
+  else if (pct > 25) msgs.push(`🟡 نسبة ${pct.toFixed(0)}٪ مرتفعة نسبياً — راجع التوزيع عند الفرصة.`);
+  else msgs.push(`✅ نسبة صحية ${pct.toFixed(0)}٪ في المحفظة.`);
+  if (f.goal === 'مضاربة') msgs.push('⚠️ استثمار مضاربي — تأكد من وضع حد للخسارة.');
+  if (f.horizon === 'قصير') msgs.push('📅 أفق قصير — راقب الأداء بشكل أسبوعي.');
+  return msgs.join(' ');
+}
+
+function deleteFund(name) {
+  if (!confirm(`هل تريد حذف كل عمليات صندوق "${name}"؟`)) return;
+  transactions = transactions.filter(t => t.name !== name);
+  localStorage.setItem('transactions', JSON.stringify(transactions));
+  closeSheet('detailSheet');
+  showToast('🗑️ تم حذف الصندوق', 'success');
+  refreshAll();
+}
+
+// ═══════════════════════════════════════════════════════
+// PRICE UPDATE
+// ═══════════════════════════════════════════════════════
+function openPriceUpdate() {
+  const portfolio = getPortfolio();
+  const el = document.getElementById('priceUpdateList');
+  if (!portfolio.length) {
+    el.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:30px;font-size:13px">لا توجد صناديق</div>';
+  } else {
+    el.innerHTML = portfolio.map(f => {
+      const r = rates[f.name];
+      return `<div class="price-card">
+        <div class="price-info">
+          <div class="price-name">${f.name}</div>
+          <div class="price-old">آخر سعر: ${r ? r.price.toFixed(2) : '—'}</div>
+        </div>
+        <div class="price-input-wrap">
+          <input class="price-input-sm" type="number" step="0.01" placeholder="السعر" data-fund="${f.name}" value="${r ? r.price : ''}">
+          <input class="price-input-sm" type="number" step="0.01" placeholder="تغيير٪" data-fund-chg="${f.name}" value="${r ? r.change : ''}" style="width:80px">
+        </div>
+      </div>`;
+    }).join('');
+  }
+  openSheet('priceSheet');
+}
+
+async function savePrices() {
+  const priceInputs = document.querySelectorAll('[data-fund]');
+  const rateRows = [];
+  priceInputs.forEach(inp => {
+    const name = inp.dataset.fund;
+    const price = +inp.value;
+    const chgInput = document.querySelector(`[data-fund-chg="${name}"]`);
+    const chg = chgInput ? +chgInput.value : 0;
+    if (price > 0) {
+      rates[name] = { price, date: new Date().toISOString().slice(0,10), change: chg };
+      rateRows.push([name, price, new Date().toISOString().slice(0,10), chg]);
+    }
+  });
+  localStorage.setItem('rates', JSON.stringify(rates));
+  await saveRatesToSheets(rateRows);
+  closePriceSheet();
+  showToast('✅ تم تحديث الأسعار', 'success');
+  refreshAll();
+}
+
+function closePriceSheet() { closeSheet('priceSheet'); }
+
+// ═══════════════════════════════════════════════════════
+// REPORTS
+// ═══════════════════════════════════════════════════════
+function refreshReports() {
+  const portfolio = getPortfolio();
+  const stats = getStats(portfolio);
+
+  // Summary
+  document.getElementById('r-invested').textContent = 'ج.م ' + fmtNum(stats.totalInvested);
+  document.getElementById('r-current').textContent = 'ج.م ' + fmtNum(stats.totalValue);
+  const profitEl = document.getElementById('r-profit');
+  profitEl.textContent = (stats.profit >= 0 ? '+' : '') + 'ج.م ' + fmtNum(stats.profit);
+  profitEl.className = 'detail-stat-val ' + (stats.profit >= 0 ? 'positive' : 'negative');
+  const realEl = document.getElementById('r-real');
+  realEl.textContent = (stats.realReturn >= 0 ? '+' : '') + stats.realReturn.toFixed(1) + '٪';
+  realEl.className = 'detail-stat-val ' + (stats.realReturn >= 0 ? 'positive' : 'negative');
+
+  // AI text
+  generatePortfolioAI(portfolio, stats);
+
+  // Concentration
+  const conc = getManagerConcentration(portfolio);
+  const concEl = document.getElementById('concentrationList');
+  if (!conc.length) {
+    concEl.innerHTML = '<div style="color:var(--text-muted);font-size:12px;text-align:center;padding:16px">لا توجد بيانات</div>';
+  } else {
+    concEl.innerHTML = conc.map(c => `
+      <div style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span style="font-size:12px;color:var(--text)">${c.name}</span>
+          <span style="font-size:12px;font-weight:700;color:${c.pct>30?'var(--red)':c.pct>20?'var(--orange)':'var(--green)'}">${c.pct.toFixed(0)}٪</span>
+        </div>
+        <div class="concentration-bar"><div class="concentration-fill" style="width:${c.pct}%"></div></div>
+      </div>
+    `).join('');
+  }
+
+  // Bar chart
+  renderBarChart(portfolio);
+
+  // Timeline
+  renderTimeline();
+}
+
+function generatePortfolioAI(portfolio, stats) {
+  const el = document.getElementById('aiText');
+  if (!portfolio.length) { el.textContent = 'أضف صناديق لبدء التحليل الذكي...'; return; }
+  const conc = getManagerConcentration(portfolio);
+  let msg = '';
+  if (stats.realReturn < 0) msg += `📉 العائد الحقيقي سلبي (${stats.realReturn.toFixed(1)}٪) بعد التضخم — محفظتك تخسر قيمتها الشرائية. `;
+  else msg += `✅ العائد الحقيقي إيجابي (${stats.realReturn.toFixed(1)}٪) — تتفوق على التضخم. `;
+  const highConc = conc.filter(c => c.pct > 30);
+  if (highConc.length) msg += `⚠️ تحذير تركيز: ${highConc.map(c=>c.name+'('+c.pct.toFixed(0)+'٪)').join('، ')}. `;
+  if (portfolio.length < 3) msg += '💡 محفظتك تحتاج تنويعاً — أضف صناديق من فئات مختلفة. ';
+  if (portfolio.length >= 5) msg += '👍 تنويع جيد — راجع الأداء ربعياً. ';
+  el.textContent = msg || 'محفظة متوازنة — استمر في المراجعة الدورية.';
+}
+
+function renderBarChart(portfolio) {
+  const dist = getTypeDistribution(portfolio);
+  if (charts.bar) charts.bar.destroy();
+  const ctx = document.getElementById('barChart').getContext('2d');
+  if (!Object.keys(dist).length) return;
+  const colors = { 'أسهم':'rgba(52,152,219,0.8)', 'ذهب':'rgba(201,168,76,0.8)', 'دخل ثابت':'rgba(46,204,113,0.8)', 'مؤشر':'rgba(155,89,182,0.8)' };
+  charts.bar = new Chart(ctx, {
+    type:'bar',
+    data:{
+      labels: Object.keys(dist),
+      datasets:[{ data:Object.values(dist), backgroundColor:Object.keys(dist).map(k=>colors[k]||'#8A8880'), borderRadius:8, borderWidth:0 }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:true, indexAxis:'y',
+      plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: c => ' ج.م ' + fmtNum(c.raw) }}},
+      scales:{
+        x:{ grid:{color:'rgba(255,255,255,0.05)'}, ticks:{color:'#8A8880', font:{size:10}}},
+        y:{ grid:{display:false}, ticks:{color:'#E8E4D8', font:{size:12, family:'Cairo'}}}
+      }
+    }
+  });
+}
+
+function renderTimeline() {
+  const el = document.getElementById('transactionTimeline');
+  const sorted = [...transactions].sort((a,b) => b.date.localeCompare(a.date)).slice(0,10);
+  if (!sorted.length) {
+    el.innerHTML = '<div style="color:var(--text-muted);font-size:12px;text-align:center;padding:20px">لا توجد عمليات</div>';
+    return;
+  }
+  const opColors = { 'شراء':'var(--green)', 'بيع':'var(--red)', 'قسط شهري':'var(--blue)' };
+  el.innerHTML = sorted.map(tx => `
+    <div style="display:flex;gap:12px;margin-bottom:14px;position:relative">
+      <div style="width:8px;height:8px;border-radius:50%;background:${opColors[tx.opType]||'var(--gold)'};margin-top:4px;flex-shrink:0;box-shadow:0 0 6px currentColor"></div>
+      <div style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:12px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <strong style="font-size:13px;color:#fff">${tx.name.slice(0,20)}</strong>
+          <span class="badge ${tx.opType==='شراء'?'badge-green':tx.opType==='بيع'?'badge-red':'badge-blue'}">${tx.opType}</span>
+        </div>
+        <div style="font-size:12px;color:var(--text-muted)">${tx.date} · ج.م ${fmtNum(tx.amount)}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+// BIAS DETECTOR
+// ═══════════════════════════════════════════════════════
+function openBiasDetector() {
+  const portfolio = getPortfolio();
+  const biases = detectBiases(portfolio);
+  const el = document.getElementById('biasContent');
+
+  if (!biases.length) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">🎯</div><div class="empty-title">لا تحيزات مكتشفة</div><div class="empty-text">محفظتك تبدو متوازنة!</div></div>';
+  } else {
+    const totalScore = Math.min(100, biases.reduce((s,b) => s + (b.sev==='high'?30:b.sev==='mid'?15:5), 0));
+    el.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <span style="font-size:13px;color:var(--text-muted)">نقاط التحيز الكلية</span>
+        <span style="font-size:28px;font-weight:900;color:${totalScore>60?'var(--red)':totalScore>30?'var(--orange)':'var(--green)'};font-family:Tajawal">${totalScore}/100</span>
+      </div>
+      ${biases.map(b => `
+        <div class="bias-card">
+          <div class="bias-name">${b.name}</div>
+          <div class="bias-def">${b.def}</div>
+          <div style="font-size:11px;color:var(--gold);margin-bottom:8px">💡 ${b.advice}</div>
+          <span class="bias-severity ${b.sev==='high'?'sev-high':b.sev==='mid'?'sev-mid':'sev-low'}">${b.sev==='high'?'خطير':b.sev==='mid'?'متوسط':'منخفض'}</span>
+        </div>
+      `).join('')}
+    `;
+  }
+  openSheet('biasSheet');
+}
+
+function detectBiases(portfolio) {
+  const biases = [];
+  const conc = getManagerConcentration(portfolio);
+
+  // Concentration bias
+  const highConc = conc.filter(c => c.pct > 30);
+  if (highConc.length) biases.push({
+    name:'تحيز التركيز', sev:'high',
+    def:`لديك تركيز عالٍ في: ${highConc.map(c=>c.name).join('، ')} (${highConc[0].pct.toFixed(0)}٪).`,
+    advice:'نوّع بين 5+ مديرين — لا تضع أكثر من 25٪ مع مدير واحد.'
+  });
+
+  // Recency bias
+  const recent = transactions.filter(t => {
+    const d = new Date(t.date);
+    const now = new Date();
+    return (now - d) / (1000*60*60*24) < 30;
+  });
+  if (recent.length > 2) biases.push({
+    name:'تحيز الحداثة', sev:'mid',
+    def:`أجريت ${recent.length} عمليات في آخر 30 يوم — قد تتأثر بالأخبار الحديثة.`,
+    advice:'ضع خطة استثمارية واضحة والتزم بها بدلاً من التفاعل مع الأخبار.'
+  });
+
+  // Speculation bias
+  const spec = portfolio.filter(f => f.goal === 'مضاربة');
+  if (spec.length > 0) biases.push({
+    name:'التحيز المضاربي', sev:spec.length > 2 ? 'high' : 'mid',
+    def:`لديك ${spec.length} صناديق بهدف مضاربي.`,
+    advice:'حدد نسبة المضاربة بـ 10٪ فقط من المحفظة.'
+  });
+
+  // Low diversification
+  if (portfolio.length < 3 && portfolio.length > 0) biases.push({
+    name:'التنويع المنخفض', sev:'mid',
+    def:`محفظتك تحتوي ${portfolio.length} صندوق فقط.`,
+    advice:'أضف صناديق من فئات مختلفة للتقليل من المخاطر.'
+  });
+
+  return biases;
+}
+
+// ═══════════════════════════════════════════════════════
+// DEMO DATA
+// ═══════════════════════════════════════════════════════
+function loadDemoData() {
+  transactions = [
+    { id:1, date:'2024-01-15', name:'أزيموت — نمو متوازن', type:'أسهم', manager:'أزيموت', opType:'شراء', amount:50000, unitPrice:12.5, goal:'نمو', horizon:'طويل', reason:'أداء ممتاز ومدير ذو خبرة', exitRule:'عند 30٪ ربح أو 15٪ خسارة', rating:'ممتاز' },
+    { id:2, date:'2024-02-01', name:'هيرميس — ذهب', type:'ذهب', manager:'هيرميس', opType:'شراء', amount:20000, unitPrice:8.3, goal:'تحوط', horizon:'طويل', reason:'تحوط ضد التضخم', exitRule:'لا أبيع — استثمار طويل', rating:'جيد' },
+    { id:3, date:'2024-03-10', name:'بلتون — دخل ثابت', type:'دخل ثابت', manager:'بلتون', opType:'شراء', amount:30000, unitPrice:10.0, goal:'دخل', horizon:'متوسط', reason:'عائد ثابت وأمان', exitRule:'عند انتهاء المدة', rating:'ممتاز' },
+    { id:4, date:'2024-03-15', name:'أزيموت — خماسي', type:'أسهم', manager:'أزيموت', opType:'شراء', amount:25000, unitPrice:9.8, goal:'نمو', horizon:'متوسط', reason:'تنويع داخل نفس المدير', exitRule:'عند 20٪ ربح', rating:'جيد' },
+    { id:5, date:'2024-04-01', name:'أزيموت — نمو متوازن', type:'أسهم', manager:'أزيموت', opType:'قسط شهري', amount:5000, unitPrice:13.2, goal:'نمو', horizon:'طويل', reason:'قسط شهري منتظم', exitRule:'عند 30٪ ربح', rating:'ممتاز' },
+  ];
+  rates = {
+    'أزيموت — نمو متوازن': { price:14.1, date:'2024-04-10', change:0.8 },
+    'هيرميس — ذهب': { price:9.1, date:'2024-04-10', change:1.2 },
+    'بلتون — دخل ثابت': { price:10.3, date:'2024-04-10', change:0.2 },
+    'أزيموت — خماسي': { price:10.5, date:'2024-04-10', change:-0.3 }
+  };
+  localStorage.setItem('transactions', JSON.stringify(transactions));
+  localStorage.setItem('rates', JSON.stringify(rates));
+  showToast('✅ تم تحميل البيانات التجريبية', 'success');
+  refreshAll();
+}
+
+// ═══════════════════════════════════════════════════════
+// EXPORT
+// ═══════════════════════════════════════════════════════
+function exportCSV() {
+  const header = 'التاريخ,اسم الصندوق,النوع,المدير,نوع العملية,المبلغ,سعر الوحدة,هدف,أفق,سبب,قاعدة الخروج,تقييم';
+  const rows = transactions.map(t =>
+    [t.date,t.name,t.type,t.manager,t.opType,t.amount,t.unitPrice,t.goal,t.horizon,`"${t.reason}"`,`"${t.exitRule}"`,t.rating].join(',')
+  );
+  const csv = '\uFEFF' + [header, ...rows].join('\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `محفظتي_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+  showToast('📤 تم تصدير البيانات', 'success');
+}
+
+// ═══════════════════════════════════════════════════════
+// UTILITIES
+// ═══════════════════════════════════════════════════════
+function fmtNum(n) {
+  return Math.abs(n) >= 1000 ? (n/1000).toFixed(1) + 'ك' : n.toFixed(0);
+}
+
+function showToast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function refreshAll() {
+  refreshDashboard();
+}
+
+// ═══════════════════════════════════════════════════════
+// INITIAL LOAD FROM SHEETS
+// ═══════════════════════════════════════════════════════
+if (config.sheetId && config.apiKey) {
+  setTimeout(() => loadFromSheets(), 3000);
+}
+
+// ═══════════════════════════════════════════════════════
+// SERVICE WORKER REGISTRATION
+// ═══════════════════════════════════════════════════════
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
